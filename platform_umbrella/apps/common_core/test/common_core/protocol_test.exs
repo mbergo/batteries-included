@@ -61,15 +61,15 @@ defmodule CommonCore.ProtocolTest do
 
   describe "valid_value?/1" do
     test "returns true for valid string values" do
-      assert Protocol.valid_value?("http") == true
-      assert Protocol.valid_value?("http2") == true
-      assert Protocol.valid_value?("tcp") == true
+      assert Protocol.valid_value?("http")
+      assert Protocol.valid_value?("http2")
+      assert Protocol.valid_value?("tcp")
     end
 
     test "returns false for invalid values" do
-      assert Protocol.valid_value?("invalid") == false
-      assert Protocol.valid_value?(:http) == false
-      assert Protocol.valid_value?(123) == false
+      refute Protocol.valid_value?("invalid")
+      refute Protocol.valid_value?(:http)
+      refute Protocol.valid_value?(123)
     end
   end
 end

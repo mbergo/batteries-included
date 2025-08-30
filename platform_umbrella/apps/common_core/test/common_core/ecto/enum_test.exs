@@ -125,16 +125,16 @@ defmodule CommonCore.Ecto.EnumTest do
 
   describe "equal?/2" do
     test "returns true for equal terms" do
-      assert StatusEnum.equal?(:active, :active) == true
-      assert StatusEnum.equal?("IS_ACTIVE", "IS_ACTIVE") == true
-      assert StatusEnum.equal?(123, 123) == true
+      assert StatusEnum.equal?(:active, :active)
+      assert StatusEnum.equal?("IS_ACTIVE", "IS_ACTIVE")
+      assert StatusEnum.equal?(123, 123)
     end
 
     test "returns false for different terms" do
-      assert StatusEnum.equal?(:active, :inactive) == false
-      assert StatusEnum.equal?("IS_ACTIVE", "IS_INACTIVE") == false
-      assert StatusEnum.equal?(:active, "IS_ACTIVE") == false
-      assert StatusEnum.equal?(123, 456) == false
+      refute StatusEnum.equal?(:active, :inactive)
+      refute StatusEnum.equal?("IS_ACTIVE", "IS_INACTIVE")
+      refute StatusEnum.equal?(:active, "IS_ACTIVE")
+      refute StatusEnum.equal?(123, 456)
     end
   end
 
@@ -147,27 +147,27 @@ defmodule CommonCore.Ecto.EnumTest do
 
   describe "valid_value?/1" do
     test "returns true for valid string values" do
-      assert StatusEnum.valid_value?("IS_ACTIVE") == true
-      assert StatusEnum.valid_value?("IS_INACTIVE") == true
-      assert StatusEnum.valid_value?("IS_PENDING") == true
+      assert StatusEnum.valid_value?("IS_ACTIVE")
+      assert StatusEnum.valid_value?("IS_INACTIVE")
+      assert StatusEnum.valid_value?("IS_PENDING")
     end
 
     test "returns false for invalid values" do
-      assert StatusEnum.valid_value?("invalid") == false
-      assert StatusEnum.valid_value?(:active) == false
-      assert StatusEnum.valid_value?(123) == false
-      assert StatusEnum.valid_value?(nil) == false
+      refute StatusEnum.valid_value?("invalid")
+      refute StatusEnum.valid_value?(:active)
+      refute StatusEnum.valid_value?(123)
+      refute StatusEnum.valid_value?(nil)
     end
 
     test "works with different enum configurations" do
-      assert PriorityEnum.valid_value?("low") == true
-      assert PriorityEnum.valid_value?("medium") == true
-      assert PriorityEnum.valid_value?("invalid") == false
+      assert PriorityEnum.valid_value?("low")
+      assert PriorityEnum.valid_value?("medium")
+      refute PriorityEnum.valid_value?("invalid")
     end
 
     test "returns false for empty enum" do
-      assert EmptyEnum.valid_value?("anything") == false
-      assert EmptyEnum.valid_value?(:anything) == false
+      refute EmptyEnum.valid_value?("anything")
+      refute EmptyEnum.valid_value?(:anything)
     end
   end
 

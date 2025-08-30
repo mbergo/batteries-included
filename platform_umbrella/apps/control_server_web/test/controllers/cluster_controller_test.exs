@@ -49,7 +49,7 @@ defmodule ControlServerWeb.ClusterControllerTest do
 
     test "renders errors when data is invalid", %{conn: conn} do
       conn = post(conn, ~p"/api/postgres/clusters", cluster: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 
@@ -86,7 +86,7 @@ defmodule ControlServerWeb.ClusterControllerTest do
       assert %{"id" => ^id} = json_response(conn, 200)["data"]
 
       conn = put(conn, ~p"/api/postgres/clusters/#{cluster}", cluster: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 

@@ -17,7 +17,7 @@ defmodule HomeBaseWeb.JwkDeleteTest do
 
       install_one = HomeBase.CustomerInstalls.get_installation!(install.id)
 
-      assert CommonCore.JWK.has_private_key?(install_one.control_jwk) == true,
+      assert CommonCore.JWK.has_private_key?(install_one.control_jwk),
              "Private key should exist before report is created"
 
       conn = post(conn, ~p"/api/v1/installations/#{install.id}/host_reports", jwt: sign(install.control_jwk, report))
@@ -28,7 +28,7 @@ defmodule HomeBaseWeb.JwkDeleteTest do
 
       install_two = HomeBase.CustomerInstalls.get_installation!(install.id)
 
-      assert CommonCore.JWK.has_private_key?(install_two.control_jwk) == false,
+      refute CommonCore.JWK.has_private_key?(install_two.control_jwk),
              "Private key should not exist after report is created"
     end
   end
@@ -39,7 +39,7 @@ defmodule HomeBaseWeb.JwkDeleteTest do
 
       install_one = HomeBase.CustomerInstalls.get_installation!(install.id)
 
-      assert CommonCore.JWK.has_private_key?(install_one.control_jwk) == true,
+      assert CommonCore.JWK.has_private_key?(install_one.control_jwk),
              "Private key should exist before report is created"
 
       conn = post(conn, ~p"/api/v1/installations/#{install.id}/usage_reports", jwt: sign(install.control_jwk, report))
@@ -50,7 +50,7 @@ defmodule HomeBaseWeb.JwkDeleteTest do
 
       install_two = HomeBase.CustomerInstalls.get_installation!(install.id)
 
-      assert CommonCore.JWK.has_private_key?(install_two.control_jwk) == false,
+      refute CommonCore.JWK.has_private_key?(install_two.control_jwk),
              "Private key should not exist after report is created"
     end
   end
@@ -63,7 +63,7 @@ defmodule HomeBaseWeb.JwkDeleteTest do
       assert %{"id" => _} = json_response(conn, 201)["data"]
 
       conn = get(conn, ~p"/api/v1/installations/#{install.id}/spec")
-      assert json_response(conn, 400)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 400)["errors"])
     end
 
     # This shows that there was some change from the test above
@@ -72,7 +72,7 @@ defmodule HomeBaseWeb.JwkDeleteTest do
 
       result = json_response(conn, 200)
 
-      assert Map.has_key?(result, "jwt") == true
+      assert Map.has_key?(result, "jwt")
     end
   end
 end

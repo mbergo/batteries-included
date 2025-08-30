@@ -48,7 +48,7 @@ defmodule ControlServerWeb.TraditionalServicesControllerTest do
 
     test "renders errors when data is invalid", %{conn: conn} do
       conn = post(conn, ~p"/api/traditional_services", service: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 
@@ -72,7 +72,7 @@ defmodule ControlServerWeb.TraditionalServicesControllerTest do
 
     test "renders errors when data is invalid", %{conn: conn, service: service} do
       conn = put(conn, ~p"/api/traditional_services/#{service}", service: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 
