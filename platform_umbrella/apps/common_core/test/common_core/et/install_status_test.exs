@@ -42,7 +42,7 @@ defmodule CommonCore.ET.InstallStatusTest do
 
     test "returns nil when status is :ok" do
       status = InstallStatus.new!(status: :ok)
-      assert InstallStatus.redirect_path(status) == nil
+      refute InstallStatus.redirect_path(status)
     end
   end
 end
