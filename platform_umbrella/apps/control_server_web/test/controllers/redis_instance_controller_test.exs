@@ -44,7 +44,7 @@ defmodule ControlServerWeb.RedisInstanceControllerTest do
 
     test "renders errors when data is invalid", %{conn: conn} do
       conn = post(conn, ~p"/api/redis/clusters", redis_instance: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 
@@ -73,7 +73,7 @@ defmodule ControlServerWeb.RedisInstanceControllerTest do
 
     test "renders errors when data is invalid", %{conn: conn, redis_instance: redis_instance} do
       conn = put(conn, ~p"/api/redis/clusters/#{redis_instance}", redis_instance: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 

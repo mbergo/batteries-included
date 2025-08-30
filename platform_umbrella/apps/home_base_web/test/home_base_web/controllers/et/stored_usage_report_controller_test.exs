@@ -30,7 +30,7 @@ defmodule HomeBaseWeb.StoredUsageReportControllerTest do
       conn =
         post(conn, ~p"/api/v1/installations/#{install.id}/usage_reports", jwt: sign(install.control_jwk, @invalid_attrs))
 
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
 
     test "renders errors when installation_id is invalid", %{conn: conn, installation: install} do

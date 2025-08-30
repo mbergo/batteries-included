@@ -35,7 +35,7 @@ defmodule ControlServerWeb.JupyterLabNotebookControllerTest do
 
     test "renders errors when data is invalid", %{conn: conn} do
       conn = post(conn, ~p"/api/notebooks/jupyter_lab_notebooks", jupyter_lab_notebook: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 
@@ -66,7 +66,7 @@ defmodule ControlServerWeb.JupyterLabNotebookControllerTest do
       conn =
         put(conn, ~p"/api/notebooks/jupyter_lab_notebooks/#{jupyter_lab_notebook}", jupyter_lab_notebook: @invalid_attrs)
 
-      assert json_response(conn, 422)["errors"] != %{}
+      refute Enum.empty?(json_response(conn, 422)["errors"])
     end
   end
 

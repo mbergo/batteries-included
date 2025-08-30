@@ -8,29 +8,29 @@ defmodule CommonCore.ET.InstallStatusTest do
   describe "status_ok?/1" do
     test "returns false when status is :bad" do
       status = InstallStatus.new!(status: :bad)
-      assert InstallStatus.status_ok?(status) == false
+      refute InstallStatus.status_ok?(status)
     end
 
     test "returns false when status is :needs_payment" do
       status = InstallStatus.new!(status: :needs_payment)
-      assert InstallStatus.status_ok?(status) == false
+      refute InstallStatus.status_ok?(status)
     end
 
     test "returns false when status is :needs_account" do
       status = InstallStatus.new!(status: :needs_account)
-      assert InstallStatus.status_ok?(status) == false
+      refute InstallStatus.status_ok?(status)
     end
 
     test "returns true when status is :ok" do
       # This is the best status
       status = InstallStatus.new!(status: :ok)
-      assert InstallStatus.status_ok?(status) == true
+      assert InstallStatus.status_ok?(status)
     end
 
     test "returns true when status is :unknown" do
       # This is just while we try and figure out what the status is
       status = InstallStatus.new!(status: :unknown)
-      assert InstallStatus.status_ok?(status) == true
+      assert InstallStatus.status_ok?(status)
     end
   end
 
