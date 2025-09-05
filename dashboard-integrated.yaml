@@ -1,0 +1,772 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Batteries Included - Control Plane Dashboard</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://unpkg.com/lucide@latest"></script>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+            * { font-family: 'Inter', sans-serif; }
+            
+            body { background: #000000; }
+            
+            .glass-dark {
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(139, 92, 246, 0.2);
+            }
+            
+            .glow-purple { box-shadow: 0 0 20px -5px rgba(139, 92, 246, 0.4); }
+            .glow-green { box-shadow: 0 0 15px -5px rgba(34, 197, 94, 0.4); }
+            .glow-amber { box-shadow: 0 0 15px -5px rgba(245, 158, 11, 0.4); }
+            .glow-red { box-shadow: 0 0 15px -5px rgba(239, 68, 68, 0.4); }
+            
+            .bar-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
+            .bar-amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
+            .bar-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+            
+            .text-glow-purple { text-shadow: 0 0 20px rgba(139, 92, 246, 0.5); }
+            
+            .loading-spinner {
+                border: 2px solid rgba(139, 92, 246, 0.3);
+                border-top: 2px solid #8b5cf6;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                animation: spin 1s linear infinite;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            .pulse-dot {
+                animation: pulse 2s infinite;
+            }
+            
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.3; }
+            }
+        </style>
+    </head>
+    <body class="bg-black text-white min-h-screen">
+        <!-- Header with Global Context Controls -->
+        <header class="glass-dark border-b border-purple-600/30">
+            <div class="container mx-auto px-6 py-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center glow-purple">
+                            <span class="text-white font-bold text-lg">⚡</span>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold text-purple-400 text-glow-purple">
+                                Batteries Included Control Plane
+                            </h1>
+                            <p class="text-xs text-purple-500/70">Azure Kubernetes Service • East US • <span id="connection-status" class="text-green-400">● Connected</span></p>
+                        </div>
+                    </div>
+                    
+                    <!-- Global Scope Controls -->
+                    <div class="flex items-center gap-3">
+                        <select id="team-selector" class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 text-sm text-purple-300 focus:border-purple-400 focus:outline-none">
+                            <option>Team: Platform</option>
+                            <option>Team: DevOps</option>
+                            <option>Team: Data</option>
+                        </select>
+                        
+                        <select id="env-selector" class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 text-sm text-purple-300 focus:border-purple-400 focus:outline-none">
+                            <option>Env: Production</option>
+                            <option>Env: Staging</option>
+                            <option>Env: Development</option>
+                        </select>
+                        
+                        <select id="namespace-selector" class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 text-sm text-purple-300 focus:border-purple-400 focus:outline-none">
+                            <option>Namespace: All</option>
+                            <option>battery-core</option>
+                            <option>istio-system</option>
+                            <option>cnpg-system</option>
+                        </select>
+                        
+                        <button onclick="refreshDashboard()" class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-sm text-purple-300 hover:bg-purple-600/30 transition-all">
+                            <i data-lucide="refresh-cw" class="w-4 h-4 inline"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <div class="container mx-auto px-6 py-6">
+            
+            <!-- Top KPI Strip -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <!-- Installations -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Installations</span>
+                        <i data-lucide="server" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span id="installations-total" class="text-2xl font-bold text-purple-300">-</span>
+                        <div class="flex gap-2 text-xs">
+                            <span id="installations-healthy" class="text-green-400">-</span>
+                            <span id="installations-degraded" class="text-amber-400">-</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 w-full bg-black/50 rounded-full h-1.5 flex gap-0.5">
+                        <div id="installations-bar-healthy" class="bar-green h-1.5 rounded-l-full" style="width: 0%"></div>
+                        <div id="installations-bar-degraded" class="bar-amber h-1.5" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Services -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Services</span>
+                        <i data-lucide="activity" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span id="services-total" class="text-2xl font-bold text-purple-300">-</span>
+                        <div class="flex gap-2 text-xs">
+                            <span id="services-uptime" class="text-green-400">-</span>
+                            <span id="services-deployments" class="text-purple-500/70">-</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        Error rate: <span id="services-error-rate" class="text-green-400">-</span> • P95: <span id="services-p95" class="text-green-400">-</span>
+                    </div>
+                </div>
+
+                <!-- Databases -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Databases</span>
+                        <i data-lucide="database" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span id="databases-total" class="text-2xl font-bold text-purple-300">-</span>
+                        <div class="flex gap-2 text-xs">
+                            <span id="databases-status" class="text-green-400">-</span>
+                            <span id="databases-backup" class="text-purple-500/70">-</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        Lag: <span id="databases-lag" class="text-green-400">-</span> • Next backup: <span id="databases-next-backup" class="text-purple-300">-</span>
+                    </div>
+                </div>
+
+                <!-- Cluster Capacity -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Cluster</span>
+                        <i data-lucide="cpu" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <div class="text-xs text-purple-500/70 mb-1">CPU</div>
+                            <div id="cluster-cpu" class="text-lg font-bold text-green-400">-</div>
+                        </div>
+                        <div class="flex-1">
+                            <div class="text-xs text-purple-500/70 mb-1">Memory</div>
+                            <div id="cluster-memory" class="text-lg font-bold text-green-400">-</div>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        <span id="cluster-nodes">-</span> • <span id="cluster-nodes-status" class="text-green-400">-</span>
+                    </div>
+                </div>
+
+                <!-- Security -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Security</span>
+                        <i data-lucide="shield" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span id="security-status" class="text-2xl font-bold text-green-400">-</span>
+                        <div id="security-details" class="text-xs text-purple-500/70">-</div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        Certs: <span id="security-certs" class="text-green-400">-</span> • SSO: <span id="security-sso" class="text-green-400">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Namespace Resources Chart -->
+                <div class="glass-dark rounded-xl p-5 border border-purple-600/30" style="max-height: 280px;">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-purple-400 font-medium">Namespace Resources</h3>
+                        <button onclick="openGrafana()" class="text-xs text-purple-500/70 hover:text-purple-400 flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                            Full View
+                        </button>
+                    </div>
+                    <div style="position: relative; height: 180px;">
+                        <canvas id="namespaceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Service Metrics -->
+                <div class="glass-dark rounded-xl p-5 border border-purple-600/30" style="max-height: 280px;">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-purple-400 font-medium">Service Performance</h3>
+                        <div class="loading-spinner" id="service-loading" style="display: none;"></div>
+                    </div>
+                    <div id="service-metrics-container" class="space-y-2 text-sm">
+                        <!-- Service metrics will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Databases Section -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-purple-400">Datastores</h3>
+                    <button onclick="manageAllDatabases()" class="text-xs text-purple-500/70 hover:text-purple-400 flex items-center gap-1">
+                        <i data-lucide="database" class="w-3 h-3"></i>
+                        Manage All
+                    </button>
+                </div>
+                
+                <div id="databases-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Database cards will be populated here -->
+                </div>
+            </div>
+
+            <!-- Alerts Section -->
+            <div class="glass-dark rounded-xl p-5 border border-purple-600/30">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-purple-400 font-medium">Active Alerts & Activity</h3>
+                    <button onclick="viewAllAlerts()" class="text-xs text-purple-500/70 hover:text-purple-400">View All</button>
+                </div>
+                <div id="alerts-container" class="space-y-2">
+                    <!-- Alerts will be populated here -->
+                </div>
+            </div>
+
+            <!-- Quick Actions Bar -->
+            <div class="glass-dark rounded-lg p-4 border border-purple-600/30 mt-6">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-purple-400">Quick Actions</span>
+                    <div class="flex gap-2">
+                        <button onclick="runBackup()" class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/30">
+                            <i data-lucide="download" class="w-3 h-3 inline mr-1"></i>Run Backup
+                        </button>
+                        <button onclick="scaleService()" class="px-3 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="trending-up" class="w-3 h-3 inline mr-1"></i>Scale Service
+                        </button>
+                        <button onclick="viewLogs()" class="px-3 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="terminal" class="w-3 h-3 inline mr-1"></i>View Logs
+                        </button>
+                        <button onclick="openSettings()" class="px-3 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="settings" class="w-3 h-3 inline mr-1"></i>Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Initialize Lucide icons
+            lucide.createIcons();
+
+            // API Configuration
+            const API_URL = 'https://batteries-dashboard.wfservices.io';
+            let dashboardData = null;
+            let namespaceChart = null;
+            let autoRefreshInterval = null;
+
+            // Initialize dashboard
+            async function initDashboard() {
+                await fetchDashboardData();
+                initCharts();
+                startAutoRefresh();
+                setupEventListeners();
+            }
+
+            // Fetch dashboard data from API
+            async function fetchDashboardData() {
+                try {
+                    document.getElementById('connection-status').innerHTML = '● Connecting...';
+                    document.getElementById('connection-status').className = 'text-amber-400';
+                    
+                    const response = await fetch(`${API_URL}/api/dashboard`);
+                    dashboardData = await response.json();
+                    
+                    document.getElementById('connection-status').innerHTML = '● Connected';
+                    document.getElementById('connection-status').className = 'text-green-400';
+                    
+                    updateDashboard(dashboardData);
+                } catch (error) {
+                    console.error('Failed to fetch dashboard data:', error);
+                    document.getElementById('connection-status').innerHTML = '● Disconnected';
+                    document.getElementById('connection-status').className = 'text-red-400';
+                    
+                    // Use fallback data
+                    useFallbackData();
+                }
+            }
+
+            // Update dashboard with real data
+            function updateDashboard(data) {
+                // Update Installations
+                if (data.installations) {
+                    document.getElementById('installations-total').textContent = data.installations.total;
+                    document.getElementById('installations-healthy').textContent = data.installations.healthy + ' healthy';
+                    document.getElementById('installations-degraded').textContent = data.installations.degraded + ' degraded';
+                    
+                    const healthyPercent = (data.installations.healthy / data.installations.total) * 100;
+                    const degradedPercent = (data.installations.degraded / data.installations.total) * 100;
+                    document.getElementById('installations-bar-healthy').style.width = healthyPercent + '%';
+                    document.getElementById('installations-bar-degraded').style.width = degradedPercent + '%';
+                }
+                
+                // Update Services
+                if (data.services) {
+                    document.getElementById('services-total').textContent = data.services.total;
+                    document.getElementById('services-uptime').textContent = data.services.uptime + '% up';
+                    document.getElementById('services-deployments').textContent = data.services.deployments + ' deploys';
+                    document.getElementById('services-error-rate').textContent = data.services.errorRate + '%';
+                    document.getElementById('services-p95').textContent = data.services.p95Latency + 'ms';
+                }
+                
+                // Update Databases
+                if (data.databases) {
+                    document.getElementById('databases-total').textContent = data.databases.total;
+                    document.getElementById('databases-status').textContent = data.databases.allSynced ? 'All synced' : 'Syncing';
+                    document.getElementById('databases-backup').textContent = data.databases.backupStatus;
+                    document.getElementById('databases-lag').textContent = data.databases.replicationLag + 'ms';
+                    document.getElementById('databases-next-backup').textContent = data.databases.nextBackupHours + 'h';
+                }
+                
+                // Update Cluster
+                if (data.cluster) {
+                    document.getElementById('cluster-cpu').textContent = Math.round(data.cluster.cpuUsage) + '%';
+                    document.getElementById('cluster-memory').textContent = Math.round(data.cluster.memoryUsage) + '%';
+                    document.getElementById('cluster-nodes').textContent = data.cluster.nodes + ' nodes';
+                    document.getElementById('cluster-nodes-status').textContent = data.cluster.nodesReady === data.cluster.nodes ? 'All ready' : data.cluster.nodesReady + ' ready';
+                }
+                
+                // Update Security
+                if (data.security) {
+                    document.getElementById('security-status').textContent = data.security.status;
+                    document.getElementById('security-details').textContent = 'All secure';
+                    document.getElementById('security-certs').textContent = data.security.certificatesOk ? 'Valid' : 'Invalid';
+                    document.getElementById('security-sso').textContent = data.security.ssoActive ? 'Active' : 'Inactive';
+                }
+                
+                // Update Charts
+                updateCharts(data);
+                
+                // Update Database Cards
+                updateDatabaseCards(data.databaseMetrics);
+                
+                // Update Service Metrics
+                updateServiceMetrics(data.serviceMetrics);
+                
+                // Update Alerts
+                updateAlerts(data.alerts, data.recentActivity);
+            }
+
+            // Initialize charts
+            function initCharts() {
+                const ctx = document.getElementById('namespaceChart').getContext('2d');
+                namespaceChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['battery-core', 'istio-system', 'cnpg-system', 'kube-system'],
+                        datasets: [
+                            {
+                                label: 'CPU %',
+                                data: [45, 32, 18, 28],
+                                backgroundColor: '#22c55e',
+                                borderColor: '#16a34a',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'Memory %',
+                                data: [62, 45, 22, 38],
+                                backgroundColor: '#8b5cf6',
+                                borderColor: '#7c3aed',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#a78bfa',
+                                    font: { size: 11 }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                ticks: {
+                                    color: '#a78bfa',
+                                    font: { size: 10 }
+                                },
+                                grid: {
+                                    color: 'rgba(139, 92, 246, 0.1)'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: '#a78bfa',
+                                    font: { size: 10 }
+                                },
+                                grid: {
+                                    color: 'rgba(139, 92, 246, 0.1)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Update charts with new data
+            function updateCharts(data) {
+                if (namespaceChart && data.namespaces) {
+                    const labels = data.namespaces.map(ns => ns.name);
+                    const cpuData = data.namespaces.map(ns => ns.cpuUsage);
+                    const memoryData = data.namespaces.map(ns => ns.memoryUsage);
+                    
+                    namespaceChart.data.labels = labels;
+                    namespaceChart.data.datasets[0].data = cpuData;
+                    namespaceChart.data.datasets[1].data = memoryData;
+                    namespaceChart.update();
+                }
+            }
+
+            // Update database cards
+            function updateDatabaseCards(databases) {
+                if (!databases) return;
+                
+                const container = document.getElementById('databases-grid');
+                container.innerHTML = '';
+                
+                databases.forEach(db => {
+                    const statusClass = db.status === 'Ready' ? 'green' : db.status === 'Degraded' ? 'amber' : 'red';
+                    const card = `
+                        <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="database" class="w-4 h-4 text-purple-500"></i>
+                                    <span class="text-purple-300 text-sm font-medium">${db.name}</span>
+                                </div>
+                                <span class="px-2 py-0.5 bg-${statusClass}-900/30 border border-${statusClass}-500/30 rounded text-xs text-${statusClass}-400">${db.status}</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div><span class="text-purple-500/70">CPU:</span> <span class="text-${db.cpuUsage > 70 ? 'amber' : 'green'}-400 ml-1">${db.cpuUsage}%</span></div>
+                                <div><span class="text-purple-500/70">Memory:</span> <span class="text-${db.memoryUsage > 70 ? 'amber' : 'green'}-400 ml-1">${db.memoryUsage}%</span></div>
+                                <div><span class="text-purple-500/70">Connections:</span> <span class="text-purple-300 ml-1">${db.connections}/${db.maxConnections}</span></div>
+                                <div><span class="text-purple-500/70">Cache Hit:</span> <span class="text-green-400 ml-1">${db.cacheHitRate}%</span></div>
+                            </div>
+                            <div class="mt-3 pt-3 border-t border-purple-600/20 text-xs">
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-purple-500/70">Replication Lag:</span>
+                                    <span class="text-${db.replicationLag > 1000 ? 'amber' : 'green'}-400">${db.replicationLag}ms</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-purple-500/70">Last Backup:</span>
+                                    <span class="text-purple-300">${db.lastBackup}</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-3">
+                                <button onclick="openDatabaseDashboard('${db.name}')" class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                    Dashboard
+                                </button>
+                                <button onclick="openDatabaseConsole('${db.name}')" class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                    Console
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML += card;
+                });
+                
+                // Re-initialize icons for new elements
+                lucide.createIcons();
+            }
+
+            // Update service metrics
+            function updateServiceMetrics(services) {
+                if (!services) return;
+                
+                const container = document.getElementById('service-metrics-container');
+                container.innerHTML = '';
+                
+                services.forEach(service => {
+                    const errorClass = service.errorRate > 1 ? 'text-red-400' : service.errorRate > 0.5 ? 'text-amber-400' : 'text-green-400';
+                    const latencyClass = service.p95Latency > 500 ? 'text-amber-400' : 'text-green-400';
+                    
+                    const metric = `
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded">
+                            <span class="text-purple-300">${service.name}</span>
+                            <div class="flex gap-4 text-xs">
+                                <span>Errors: <span class="${errorClass}">${service.errorRate}%</span></span>
+                                <span>P95: <span class="${latencyClass}">${service.p95Latency}ms</span></span>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML += metric;
+                });
+            }
+
+            // Update alerts
+            function updateAlerts(alerts, activities) {
+                const container = document.getElementById('alerts-container');
+                container.innerHTML = '';
+                
+                if (alerts && alerts.length > 0) {
+                    alerts.forEach(alert => {
+                        const iconClass = alert.severity === 'high' ? 'alert-triangle' : alert.severity === 'medium' ? 'alert-circle' : 'info';
+                        const colorClass = alert.severity === 'high' ? 'red' : alert.severity === 'medium' ? 'amber' : 'purple';
+                        
+                        const alertHtml = `
+                            <div class="flex items-start gap-3 p-2 bg-${colorClass}-900/10 border border-${colorClass}-500/30 rounded">
+                                <i data-lucide="${iconClass}" class="w-4 h-4 text-${colorClass}-400 mt-0.5"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm text-${colorClass}-400">${alert.message}</div>
+                                    <div class="text-xs text-purple-500/70">${alert.source} • ${formatTime(alert.timestamp)}</div>
+                                </div>
+                                <button onclick="acknowledgeAlert('${alert.id}')" class="text-xs text-purple-500/70 hover:text-purple-400">Ack</button>
+                            </div>
+                        `;
+                        container.innerHTML += alertHtml;
+                    });
+                }
+                
+                if (activities && activities.length > 0) {
+                    container.innerHTML += '<div class="mt-4 pt-4 border-t border-purple-600/20"><div class="text-xs text-purple-500/70 mb-2">Recent Activity</div><div class="space-y-1 text-xs">';
+                    
+                    activities.forEach(activity => {
+                        container.innerHTML += `
+                            <div class="flex justify-between">
+                                <span class="text-purple-300">${activity.message}</span>
+                                <span class="text-purple-500/70">${formatTime(activity.timestamp)}</span>
+                            </div>
+                        `;
+                    });
+                    
+                    container.innerHTML += '</div></div>';
+                }
+                
+                // Re-initialize icons
+                lucide.createIcons();
+            }
+
+            // Format timestamp
+            function formatTime(timestamp) {
+                const date = new Date(timestamp);
+                const now = new Date();
+                const diff = now - date;
+                const minutes = Math.floor(diff / 60000);
+                const hours = Math.floor(diff / 3600000);
+                
+                if (minutes < 60) return `${minutes}m ago`;
+                if (hours < 24) return `${hours}h ago`;
+                return date.toLocaleDateString();
+            }
+
+            // Start auto-refresh
+            function startAutoRefresh() {
+                autoRefreshInterval = setInterval(() => {
+                    fetchDashboardData();
+                }, 5000);
+            }
+
+            // Stop auto-refresh
+            function stopAutoRefresh() {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+
+            // Manual refresh
+            function refreshDashboard() {
+                fetchDashboardData();
+            }
+
+            // Button click handlers
+            function runBackup() {
+                alert('Backup initiated. This would trigger a backup job via the API.');
+                console.log('POST /api/backup');
+            }
+
+            function scaleService() {
+                const service = prompt('Enter service name to scale:');
+                const replicas = prompt('Enter number of replicas:');
+                if (service && replicas) {
+                    alert(`Scaling ${service} to ${replicas} replicas...`);
+                    console.log(`POST /api/services/${service}/scale`, { replicas });
+                }
+            }
+
+            function viewLogs() {
+                const namespace = document.getElementById('namespace-selector').value;
+                alert(`Opening logs for namespace: ${namespace}`);
+                console.log(`GET /api/logs?namespace=${namespace}`);
+            }
+
+            function openSettings() {
+                alert('Settings panel would open here');
+                console.log('Navigate to /settings');
+            }
+
+            function openGrafana() {
+                window.open('http://51.8.48.209:3000', '_blank');
+            }
+
+            function manageAllDatabases() {
+                alert('Database management panel would open here');
+                console.log('Navigate to /databases');
+            }
+
+            function openDatabaseDashboard(dbName) {
+                alert(`Opening dashboard for ${dbName}`);
+                console.log(`GET /api/databases/${dbName}/dashboard`);
+            }
+
+            function openDatabaseConsole(dbName) {
+                alert(`Opening console for ${dbName}`);
+                console.log(`POST /api/databases/${dbName}/console`);
+            }
+
+            function viewAllAlerts() {
+                alert('Opening alerts dashboard');
+                console.log('Navigate to /alerts');
+            }
+
+            function acknowledgeAlert(alertId) {
+                alert(`Alert acknowledged: ${alertId}`);
+                console.log(`POST /api/alerts/${alertId}/acknowledge`);
+            }
+
+            // Setup event listeners
+            function setupEventListeners() {
+                document.getElementById('team-selector').addEventListener('change', (e) => {
+                    console.log('Team changed:', e.target.value);
+                    fetchDashboardData();
+                });
+                
+                document.getElementById('env-selector').addEventListener('change', (e) => {
+                    console.log('Environment changed:', e.target.value);
+                    fetchDashboardData();
+                });
+                
+                document.getElementById('namespace-selector').addEventListener('change', (e) => {
+                    console.log('Namespace changed:', e.target.value);
+                    fetchDashboardData();
+                });
+            }
+
+            // Fallback data when API is unavailable
+            function useFallbackData() {
+                const fallbackData = {
+                    installations: { total: 3, healthy: 2, degraded: 1, offline: 0 },
+                    services: { total: 47, uptime: 99.2, errorRate: 0.02, p95Latency: 145, deployments: 3 },
+                    databases: { total: 8, allSynced: true, backupStatus: "Backed up", replicationLag: 0, nextBackupHours: 2 },
+                    cluster: { cpuUsage: 42, memoryUsage: 58, nodes: 2, nodesReady: 2 },
+                    security: { status: "OK", certificatesOk: true, ssoActive: true, certExpireDays: 82 },
+                    namespaces: [
+                        { name: "battery-core", cpuUsage: 45, memoryUsage: 62 },
+                        { name: "istio-system", cpuUsage: 32, memoryUsage: 45 },
+                        { name: "cnpg-system", cpuUsage: 18, memoryUsage: 22 },
+                        { name: "kube-system", cpuUsage: 28, memoryUsage: 38 }
+                    ],
+                    serviceMetrics: [
+                        { name: "auth-service", errorRate: 0.8, p95Latency: 234 },
+                        { name: "data-processor", errorRate: 0.02, p95Latency: 845 },
+                        { name: "webhook-handler", errorRate: 0.5, p95Latency: 123 }
+                    ],
+                    databaseMetrics: [
+                        { name: "postgres-main", type: "PostgreSQL", status: "Ready", cpuUsage: 12, memoryUsage: 45, connections: 24, maxConnections: 100, cacheHitRate: 98.2, replicationLag: 0, lastBackup: "2h ago" },
+                        { name: "redis-cache", type: "Redis", status: "Ready", cpuUsage: 8, memoryUsage: 22, connections: 145, maxConnections: 500, cacheHitRate: 99.1, replicationLag: 0, lastBackup: "N/A" },
+                        { name: "mongo-analytics", type: "MongoDB", status: "Degraded", cpuUsage: 78, memoryUsage: 82, connections: 89, maxConnections: 100, cacheHitRate: 87.3, replicationLag: 4200, lastBackup: "4h ago" }
+                    ],
+                    alerts: [
+                        { id: "1", type: "warning", severity: "medium", message: "High Memory Usage", source: "mongo-analytics", timestamp: new Date(Date.now() - 900000) },
+                        { id: "2", type: "info", severity: "low", message: "Scheduled Maintenance", source: "system", timestamp: new Date(Date.now() - 7200000) }
+                    ],
+                    recentActivity: [
+                        { type: "deployment", message: "Deployment completed", timestamp: new Date(Date.now() - 300000) },
+                        { type: "scaling", message: "Auto-scaling triggered", timestamp: new Date(Date.now() - 720000) },
+                        { type: "backup", message: "Backup completed", timestamp: new Date(Date.now() - 7200000) }
+                    ]
+                };
+                
+                updateDashboard(fallbackData);
+            }
+
+            // Initialize on page load
+            window.addEventListener('DOMContentLoaded', initDashboard);
+        </script>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: batteries-dashboard-static
+  template:
+    metadata:
+      labels:
+        app: batteries-dashboard-static
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: html
+        configMap:
+          name: batteries-dashboard-static
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  type: ClusterIP
+  selector:
+    app: batteries-dashboard-static
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP

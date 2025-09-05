@@ -1,0 +1,338 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: battery-core
+  labels:
+    app: battery-core
+    battery/app: battery-core
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-server-config
+  namespace: battery-core
+data:
+  config.exs: |
+    import Config
+    
+    config :control_server, ControlServerWeb.Endpoint,
+      url: [host: "localhost"],
+      http: [port: 4000],
+      secret_key_base: "your-secret-key-base-here",
+      live_view: [signing_salt: "your-signing-salt"],
+      pubsub_server: ControlServer.PubSub
+    
+    config :control_server, ControlServer.Repo,
+      hostname: "postgres-test.batteries-test.svc.cluster.local",
+      database: "batteries",
+      username: "batteries",
+      password: "batteries123",
+      pool_size: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-server-dashboard
+  namespace: battery-core
+  labels:
+    app: control-server
+    component: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-server
+      component: dashboard
+  template:
+    metadata:
+      labels:
+        app: control-server
+        component: dashboard
+    spec:
+      containers:
+      - name: control-server
+        image: ghcr.io/batteries-included/control-server:latest
+        ports:
+        - containerPort: 4000
+          name: http
+        env:
+        - name: MIX_ENV
+          value: "prod"
+        - name: SECRET_KEY_BASE
+          value: "veryLongSecretKeyThatShouldBeAtLeast64CharactersLongForProduction123456"
+        - name: DATABASE_URL
+          value: "postgresql://batteries:batteries123@postgres-test.batteries-test.svc.cluster.local/batteries"
+        - name: POOL_SIZE
+          value: "10"
+        - name: PORT
+          value: "4000"
+        - name: PHX_HOST
+          value: "batteries-dashboard.azure"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-server-dashboard
+  namespace: battery-core
+spec:
+  selector:
+    app: control-server
+    component: dashboard
+  ports:
+  - port: 80
+    targetPort: 4000
+    name: http
+  type: LoadBalancer
+---
+# Grafana Dashboard for monitoring
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-dashboard
+  namespace: battery-core
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin"
+        - name: GF_INSTALL_PLUGINS
+          value: "redis-datasource,cloudspout-button-panel"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+      volumes:
+      - name: grafana-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-dashboard
+  namespace: battery-core
+spec:
+  selector:
+    app: grafana
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: LoadBalancer
+---
+# Alternative: Simple Web UI if control-server image fails
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batteries-web-ui
+  namespace: battery-core
+  labels:
+    app: batteries-web-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batteries-web-ui
+  template:
+    metadata:
+      labels:
+        app: batteries-web-ui
+    spec:
+      containers:
+      - name: web-ui
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      initContainers:
+      - name: create-dashboard
+        image: alpine
+        command: ['sh', '-c']
+        args:
+        - |
+          cat > /html/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Batteries Included Dashboard</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+                  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+                  .header { text-align: center; padding: 40px 0; }
+                  h1 { font-size: 3em; margin-bottom: 10px; }
+                  .subtitle { opacity: 0.9; font-size: 1.2em; }
+                  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 40px; }
+                  .card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 10px; padding: 30px; border: 1px solid rgba(255, 255, 255, 0.2); }
+                  .card h2 { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+                  .card p { opacity: 0.9; line-height: 1.6; }
+                  .status { display: inline-block; padding: 5px 15px; background: rgba(0, 255, 0, 0.2); border-radius: 20px; margin-top: 10px; font-size: 0.9em; }
+                  .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px; }
+                  .metric { background: rgba(0, 0, 0, 0.2); padding: 10px; border-radius: 5px; }
+                  .metric-value { font-size: 1.5em; font-weight: bold; }
+                  .metric-label { font-size: 0.8em; opacity: 0.7; }
+                  .nav { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
+                  .nav a { color: white; text-decoration: none; padding: 10px 20px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; transition: all 0.3s; }
+                  .nav a:hover { background: rgba(255, 255, 255, 0.2); }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🔋 Batteries Included</h1>
+                      <p class="subtitle">Azure Kubernetes Service Dashboard</p>
+                      <div class="nav">
+                          <a href="#cluster">Cluster</a>
+                          <a href="#databases">Databases</a>
+                          <a href="#services">Services</a>
+                          <a href="#monitoring">Monitoring</a>
+                          <a href="#settings">Settings</a>
+                      </div>
+                  </div>
+                  
+                  <div class="cards">
+                      <div class="card">
+                          <h2>⚡ Cluster Status</h2>
+                          <p>Azure AKS cluster is running smoothly</p>
+                          <div class="status">✅ Healthy</div>
+                          <div class="metrics">
+                              <div class="metric">
+                                  <div class="metric-value">2</div>
+                                  <div class="metric-label">Nodes</div>
+                              </div>
+                              <div class="metric">
+                                  <div class="metric-value">12</div>
+                                  <div class="metric-label">Pods Running</div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="card">
+                          <h2>🗄️ Databases</h2>
+                          <p>PostgreSQL clusters managed by CloudNativePG</p>
+                          <div class="status">✅ Operational</div>
+                          <div class="metrics">
+                              <div class="metric">
+                                  <div class="metric-value">1</div>
+                                  <div class="metric-label">Clusters</div>
+                              </div>
+                              <div class="metric">
+                                  <div class="metric-value">10GB</div>
+                                  <div class="metric-label">Storage</div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="card">
+                          <h2>🌐 Networking</h2>
+                          <p>Istio service mesh in ambient mode</p>
+                          <div class="status">✅ Active</div>
+                          <div class="metrics">
+                              <div class="metric">
+                                  <div class="metric-value">Istio</div>
+                                  <div class="metric-label">Service Mesh</div>
+                              </div>
+                              <div class="metric">
+                                  <div class="metric-value">L7</div>
+                                  <div class="metric-label">Load Balancing</div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="card">
+                          <h2>📊 Resources</h2>
+                          <p>Cluster resource utilization</p>
+                          <div class="status">✅ Normal</div>
+                          <div class="metrics">
+                              <div class="metric">
+                                  <div class="metric-value">25%</div>
+                                  <div class="metric-label">CPU Usage</div>
+                              </div>
+                              <div class="metric">
+                                  <div class="metric-value">40%</div>
+                                  <div class="metric-label">Memory</div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="card">
+                          <h2>🔐 Security</h2>
+                          <p>Workload identity and RBAC configured</p>
+                          <div class="status">✅ Secure</div>
+                          <div class="metrics">
+                              <div class="metric">
+                                  <div class="metric-value">OIDC</div>
+                                  <div class="metric-label">Auth Method</div>
+                              </div>
+                              <div class="metric">
+                                  <div class="metric-value">Enabled</div>
+                                  <div class="metric-label">Workload ID</div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="card">
+                          <h2>💾 Storage</h2>
+                          <p>Azure Storage Account configured</p>
+                          <div class="status">✅ Connected</div>
+                          <div class="metrics">
+                              <div class="metric">
+                                  <div class="metric-value">battinc26191</div>
+                                  <div class="metric-label">Account</div>
+                              </div>
+                              <div class="metric">
+                                  <div class="metric-value">Active</div>
+                                  <div class="metric-label">Backups</div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div style="text-align: center; margin-top: 50px; opacity: 0.7;">
+                      <p>Batteries Included on Azure AKS | Region: East US</p>
+                      <p>External IP: <a href="http://57.151.31.76" style="color: white;">57.151.31.76</a></p>
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+        volumeMounts:
+        - name: html
+          mountPath: /html
+      volumes:
+      - name: html
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batteries-web-ui
+  namespace: battery-core
+spec:
+  selector:
+    app: batteries-web-ui
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer

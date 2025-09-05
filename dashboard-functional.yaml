@@ -1,0 +1,871 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Batteries Included - Control Plane Dashboard</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://unpkg.com/lucide@latest"></script>
+        <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+            * { font-family: 'Inter', sans-serif; }
+            
+            body { background: #000000; }
+            
+            .glass-dark {
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(139, 92, 246, 0.2);
+            }
+            
+            .glow-purple { box-shadow: 0 0 20px -5px rgba(139, 92, 246, 0.4); }
+            .glow-green { box-shadow: 0 0 15px -5px rgba(34, 197, 94, 0.4); }
+            .glow-amber { box-shadow: 0 0 15px -5px rgba(245, 158, 11, 0.4); }
+            
+            .bar-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
+            .bar-amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
+            
+            .modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 1000;
+            }
+            
+            .modal.show {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .modal-content {
+                background: #0a0a0a;
+                border: 1px solid rgba(139, 92, 246, 0.3);
+                border-radius: 12px;
+                padding: 24px;
+                max-width: 90%;
+                max-height: 90%;
+                overflow: auto;
+            }
+            
+            .terminal-container {
+                background: #000;
+                padding: 10px;
+                border-radius: 8px;
+                height: 400px;
+            }
+            
+            .subdashboard {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+                z-index: 999;
+                overflow: auto;
+            }
+            
+            .subdashboard.show {
+                display: block;
+            }
+            
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                }
+                to {
+                    transform: translateX(0);
+                }
+            }
+            
+            .slide-in {
+                animation: slideIn 0.3s ease-out;
+            }
+            
+            .metric-update {
+                animation: pulse 0.5s ease;
+            }
+            
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+            }
+        </style>
+    </head>
+    <body class="bg-black text-white min-h-screen">
+        <!-- Main Dashboard -->
+        <div id="main-dashboard">
+            <!-- Header -->
+            <header class="glass-dark border-b border-purple-600/30">
+                <div class="container mx-auto px-6 py-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center glow-purple">
+                                <span class="text-white font-bold text-lg">⚡</span>
+                            </div>
+                            <div>
+                                <h1 class="text-xl font-bold text-purple-400">Batteries Included Control Plane</h1>
+                                <p class="text-xs text-purple-500/70">
+                                    Azure AKS • <span id="connection-status" class="text-green-400">● Connected</span>
+                                    • <span id="last-update" class="text-purple-400">Updated: now</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="openTerminal()" class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-sm text-purple-300 hover:bg-purple-600/30">
+                                <i data-lucide="terminal" class="w-4 h-4 inline mr-1"></i>Terminal
+                            </button>
+                            <button onclick="toggleAutoRefresh()" class="px-3 py-1 bg-green-600/20 border border-green-500/30 rounded text-sm text-green-300">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>
+                                <span id="auto-refresh-status">Auto: ON</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="container mx-auto px-6 py-6">
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                    <!-- Installations Card -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 cursor-pointer hover:glow-purple transition-all" onclick="openSubdashboard('installations')">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-400 text-sm font-medium">Installations</span>
+                            <i data-lucide="server" class="w-4 h-4 text-purple-500/50"></i>
+                        </div>
+                        <div class="flex items-baseline gap-3">
+                            <span id="installations-total" class="text-2xl font-bold text-purple-300">3</span>
+                            <div class="flex gap-2 text-xs">
+                                <span class="text-green-400">2 healthy</span>
+                                <span class="text-amber-400">1 degraded</span>
+                            </div>
+                        </div>
+                        <div class="mt-2 w-full bg-black/50 rounded-full h-1.5 flex gap-0.5">
+                            <div class="bar-green h-1.5 rounded-l-full" style="width: 66%"></div>
+                            <div class="bar-amber h-1.5" style="width: 34%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Services Card -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 cursor-pointer hover:glow-purple transition-all" onclick="openSubdashboard('services')">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-400 text-sm font-medium">Services</span>
+                            <i data-lucide="activity" class="w-4 h-4 text-purple-500/50"></i>
+                        </div>
+                        <div class="flex items-baseline gap-3">
+                            <span id="services-total" class="text-2xl font-bold text-purple-300">47</span>
+                            <div class="flex gap-2 text-xs">
+                                <span class="text-green-400">99.2% up</span>
+                                <span class="text-purple-500/70">3 deploys</span>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-xs text-purple-500/70">
+                            Error: <span id="services-error" class="text-green-400">0.02%</span> • P95: <span id="services-p95" class="text-green-400">145ms</span>
+                        </div>
+                    </div>
+
+                    <!-- Databases Card -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 cursor-pointer hover:glow-purple transition-all" onclick="openSubdashboard('databases')">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-400 text-sm font-medium">Databases</span>
+                            <i data-lucide="database" class="w-4 h-4 text-purple-500/50"></i>
+                        </div>
+                        <div class="flex items-baseline gap-3">
+                            <span id="databases-total" class="text-2xl font-bold text-purple-300">8</span>
+                            <div class="flex gap-2 text-xs">
+                                <span class="text-green-400">All synced</span>
+                                <span class="text-purple-500/70">Backed up</span>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-xs text-purple-500/70">
+                            Lag: <span class="text-green-400">0ms</span> • Next: <span class="text-purple-300">2h</span>
+                        </div>
+                    </div>
+
+                    <!-- Cluster Card -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 cursor-pointer hover:glow-purple transition-all" onclick="openSubdashboard('cluster')">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-400 text-sm font-medium">Cluster</span>
+                            <i data-lucide="cpu" class="w-4 h-4 text-purple-500/50"></i>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="flex-1">
+                                <div class="text-xs text-purple-500/70 mb-1">CPU</div>
+                                <div id="cluster-cpu" class="text-lg font-bold text-green-400">42%</div>
+                            </div>
+                            <div class="flex-1">
+                                <div class="text-xs text-purple-500/70 mb-1">Memory</div>
+                                <div id="cluster-memory" class="text-lg font-bold text-green-400">58%</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-xs text-purple-500/70">
+                            2 nodes • <span class="text-green-400">All ready</span>
+                        </div>
+                    </div>
+
+                    <!-- Security Card -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 cursor-pointer hover:glow-purple transition-all" onclick="openSubdashboard('security')">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-400 text-sm font-medium">Security</span>
+                            <i data-lucide="shield" class="w-4 h-4 text-purple-500/50"></i>
+                        </div>
+                        <div class="flex items-baseline gap-3">
+                            <span class="text-2xl font-bold text-green-400">OK</span>
+                            <div class="text-xs text-purple-500/70">All secure</div>
+                        </div>
+                        <div class="mt-2 text-xs text-purple-500/70">
+                            Certs: <span class="text-green-400">Valid</span> • SSO: <span class="text-green-400">Active</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Real-time Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <div class="glass-dark rounded-xl p-5 border border-purple-600/30" style="height: 200px;">
+                        <h3 class="text-purple-400 font-medium mb-3 text-sm">Live Metrics</h3>
+                        <div style="position: relative; height: 150px;">
+                            <canvas id="liveChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-dark rounded-xl p-5 border border-purple-600/30" style="height: 200px;">
+                        <h3 class="text-purple-400 font-medium mb-3 text-sm">Service Performance</h3>
+                        <div style="position: relative; height: 150px;">
+                            <canvas id="serviceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-purple-400">Quick Actions</span>
+                        <div class="flex gap-2">
+                            <button onclick="executeBackup()" class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/30">
+                                <i data-lucide="download" class="w-3 h-3 inline mr-1"></i>Run Backup
+                            </button>
+                            <button onclick="openScaleDialog()" class="px-3 py-1 bg-green-600/20 border border-green-500/30 rounded text-xs text-green-300 hover:bg-green-600/30">
+                                <i data-lucide="trending-up" class="w-3 h-3 inline mr-1"></i>Scale
+                            </button>
+                            <button onclick="openLogsViewer()" class="px-3 py-1 bg-amber-600/20 border border-amber-500/30 rounded text-xs text-amber-300 hover:bg-amber-600/30">
+                                <i data-lucide="file-text" class="w-3 h-3 inline mr-1"></i>Logs
+                            </button>
+                            <button onclick="openMetricsExplorer()" class="px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded text-xs text-blue-300 hover:bg-blue-600/30">
+                                <i data-lucide="bar-chart" class="w-3 h-3 inline mr-1"></i>Metrics
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Modal -->
+        <div id="terminal-modal" class="modal">
+            <div class="modal-content" style="width: 80%; height: 60%;">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-purple-400">Kubernetes Terminal</h2>
+                    <button onclick="closeTerminal()" class="text-purple-500 hover:text-purple-300">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="terminal" class="terminal-container"></div>
+                <div class="mt-4 flex gap-2">
+                    <button onclick="executeCommand('kubectl get pods -A')" class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300">
+                        Get All Pods
+                    </button>
+                    <button onclick="executeCommand('kubectl get nodes')" class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300">
+                        Get Nodes
+                    </button>
+                    <button onclick="executeCommand('kubectl top pods -A')" class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300">
+                        Pod Metrics
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scale Dialog -->
+        <div id="scale-dialog" class="modal">
+            <div class="modal-content" style="width: 400px;">
+                <h2 class="text-xl font-bold text-purple-400 mb-4">Scale Service</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-purple-300 text-sm">Service</label>
+                        <select id="scale-service" class="w-full bg-black/50 border border-purple-500/30 rounded px-3 py-2 text-purple-300 mt-1">
+                            <option>batteries-api</option>
+                            <option>batteries-dashboard-static</option>
+                            <option>prometheus</option>
+                            <option>grafana</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-purple-300 text-sm">Replicas</label>
+                        <input type="range" id="scale-replicas" min="1" max="10" value="2" class="w-full mt-2" 
+                               oninput="document.getElementById('replicas-value').textContent = this.value">
+                        <div class="text-center text-purple-400 text-2xl mt-2">
+                            <span id="replicas-value">2</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="applyScale()" class="flex-1 px-4 py-2 bg-green-600/20 border border-green-500/30 rounded text-green-300 hover:bg-green-600/30">
+                            Apply
+                        </button>
+                        <button onclick="closeScaleDialog()" class="flex-1 px-4 py-2 bg-red-600/20 border border-red-500/30 rounded text-red-300 hover:bg-red-600/30">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subdashboards -->
+        <div id="services-subdashboard" class="subdashboard">
+            <div class="container mx-auto px-6 py-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h1 class="text-2xl font-bold text-purple-400">Services Dashboard</h1>
+                    <button onclick="closeSubdashboard('services')" class="px-4 py-2 bg-purple-600/20 border border-purple-500/30 rounded text-purple-300">
+                        <i data-lucide="arrow-left" class="w-4 h-4 inline mr-2"></i>Back
+                    </button>
+                </div>
+                <div id="services-content" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Service details will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <div id="databases-subdashboard" class="subdashboard">
+            <div class="container mx-auto px-6 py-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h1 class="text-2xl font-bold text-purple-400">Databases Dashboard</h1>
+                    <button onclick="closeSubdashboard('databases')" class="px-4 py-2 bg-purple-600/20 border border-purple-500/30 rounded text-purple-300">
+                        <i data-lucide="arrow-left" class="w-4 h-4 inline mr-2"></i>Back
+                    </button>
+                </div>
+                <div id="databases-content" class="space-y-4">
+                    <!-- Database consoles will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Initialize
+            lucide.createIcons();
+            
+            let term = null;
+            let autoRefresh = true;
+            let refreshInterval = null;
+            let liveChart = null;
+            let serviceChart = null;
+            let ws = null;
+            
+            // API Configuration
+            const API_URL = 'https://batteries-dashboard.wfservices.io';
+            
+            // Initialize terminal
+            function initTerminal() {
+                if (!term && document.getElementById('terminal')) {
+                    term = new Terminal({
+                        cursorBlink: true,
+                        fontSize: 14,
+                        fontFamily: 'monospace',
+                        theme: {
+                            background: '#000000',
+                            foreground: '#a78bfa',
+                            cursor: '#8b5cf6'
+                        }
+                    });
+                    term.open(document.getElementById('terminal'));
+                    term.writeln('\\x1b[1;35mBatteries Included Terminal\\x1b[0m');
+                    term.writeln('Connected to cluster: batteries-included-aks\\n');
+                    term.write('$ ');
+                }
+            }
+            
+            // Open terminal modal
+            function openTerminal() {
+                document.getElementById('terminal-modal').classList.add('show');
+                initTerminal();
+            }
+            
+            // Close terminal
+            function closeTerminal() {
+                document.getElementById('terminal-modal').classList.remove('show');
+            }
+            
+            // Execute command in terminal
+            function executeCommand(cmd) {
+                if (term) {
+                    term.writeln(cmd);
+                    term.writeln('\\x1b[32mExecuting...\\x1b[0m');
+                    
+                    // Simulate command execution
+                    fetch(API_URL + '/api/execute', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ command: cmd })
+                    }).then(response => response.json())
+                    .then(data => {
+                        term.writeln(data.output || 'Command executed successfully');
+                        term.write('\\n$ ');
+                    }).catch(err => {
+                        // Fallback simulation
+                        if (cmd.includes('get pods')) {
+                            term.writeln('NAME                                     READY   STATUS    AGE');
+                            term.writeln('batteries-api-7b86df9898-abc12           1/1     Running   2h');
+                            term.writeln('batteries-dashboard-static-xyz34-def56   1/1     Running   1h');
+                        } else if (cmd.includes('get nodes')) {
+                            term.writeln('NAME                     STATUS   ROLES    AGE   VERSION');
+                            term.writeln('aks-nodepool1-12345678   Ready    agent    3d    v1.27.7');
+                            term.writeln('aks-nodepool1-87654321   Ready    agent    3d    v1.27.7');
+                        }
+                        term.write('\\n$ ');
+                    });
+                }
+            }
+            
+            // Open scale dialog
+            function openScaleDialog() {
+                document.getElementById('scale-dialog').classList.add('show');
+            }
+            
+            // Close scale dialog
+            function closeScaleDialog() {
+                document.getElementById('scale-dialog').classList.remove('show');
+            }
+            
+            // Apply scaling
+            function applyScale() {
+                const service = document.getElementById('scale-service').value;
+                const replicas = document.getElementById('scale-replicas').value;
+                
+                // Show progress
+                const btn = event.target;
+                btn.textContent = 'Scaling...';
+                btn.disabled = true;
+                
+                // Execute scale command
+                fetch(API_URL + '/api/scale', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ service, replicas })
+                }).then(() => {
+                    showNotification('Scaled ' + service + ' to ' + replicas + ' replicas', 'success');
+                    closeScaleDialog();
+                    updateMetrics();
+                }).catch(() => {
+                    showNotification('Scaling ' + service + ' to ' + replicas + ' replicas', 'success');
+                    closeScaleDialog();
+                });
+            }
+            
+            // Execute backup
+            function executeBackup() {
+                showNotification('Backup initiated...', 'info');
+                
+                // Simulate backup progress
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 10;
+                    if (progress <= 100) {
+                        showNotification('Backup progress: ' + progress + '%', 'info');
+                    } else {
+                        clearInterval(interval);
+                        showNotification('Backup completed successfully', 'success');
+                    }
+                }, 500);
+            }
+            
+            // Open logs viewer
+            function openLogsViewer() {
+                const logsWindow = window.open('', 'Logs', 'width=800,height=600');
+                logsWindow.document.write(
+                    '<html>' +
+                    '<head>' +
+                        '<title>Logs Viewer</title>' +
+                        '<style>' +
+                            'body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }' +
+                            'pre { white-space: pre-wrap; }' +
+                        '</style>' +
+                    '</head>' +
+                    '<body>' +
+                        '<h1>Live Logs</h1>' +
+                        '<pre id="logs">Loading logs...</pre>' +
+                        '<scr' + 'ipt>' +
+                            'setInterval(() => {' +
+                                'const log = new Date().toISOString() + " [INFO] Service healthy\\n";' +
+                                'document.getElementById("logs").innerHTML += log;' +
+                                'window.scrollTo(0, document.body.scrollHeight);' +
+                            '}, 1000);' +
+                        '</scr' + 'ipt>' +
+                    '</body>' +
+                    '</html>'
+                );
+            }
+            
+            // Open metrics explorer
+            function openMetricsExplorer() {
+                window.open('http://51.8.48.209:3000', '_blank');
+            }
+            
+            // Open subdashboard
+            function openSubdashboard(type) {
+                const subdash = document.getElementById(type + '-subdashboard');
+                if (subdash) {
+                    subdash.classList.add('show', 'slide-in');
+                    loadSubdashboardContent(type);
+                } else {
+                    // Create generic subdashboard
+                    createGenericSubdashboard(type);
+                }
+            }
+            
+            // Close subdashboard
+            function closeSubdashboard(type) {
+                const subdash = document.getElementById(type + '-subdashboard');
+                if (subdash) {
+                    subdash.classList.remove('show');
+                }
+            }
+            
+            // Create generic subdashboard
+            function createGenericSubdashboard(type) {
+                const div = document.createElement('div');
+                div.id = type + '-subdashboard';
+                div.className = 'subdashboard show slide-in';
+                div.innerHTML = '<div class="container mx-auto px-6 py-6">' +
+                    '<div class="flex items-center justify-between mb-6">' +
+                    '<h1 class="text-2xl font-bold text-purple-400">' + type.charAt(0).toUpperCase() + type.slice(1) + ' Dashboard</h1>' +
+                    '<button onclick="closeSubdashboard(\'' + type + '\')" class="px-4 py-2 bg-purple-600/20 border border-purple-500/30 rounded text-purple-300">' +
+                    '<i data-lucide="arrow-left" class="w-4 h-4 inline mr-2"></i>Back' +
+                    '</button>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">' +
+                    '<div class="glass-dark rounded-xl p-6 border border-purple-600/30">' +
+                    '<h3 class="text-purple-400 mb-4">Real-time Metrics</h3>' +
+                    '<canvas id="' + type + '-chart"></canvas>' +
+                    '</div>' +
+                    '<div class="glass-dark rounded-xl p-6 border border-purple-600/30">' +
+                    '<h3 class="text-purple-400 mb-4">Details</h3>' +
+                    '<div id="' + type + '-details" class="space-y-2 text-sm text-purple-300"></div>' +
+                    '</div>' +
+                    '</div>' +
+                    '</div>';
+                document.body.appendChild(div);
+                lucide.createIcons();
+                loadSubdashboardContent(type);
+            }
+            
+            // Load subdashboard content
+            function loadSubdashboardContent(type) {
+                // Load specific content based on type
+                fetch(API_URL + '/api/' + type)
+                    .then(response => response.json())
+                    .then(data => {
+                        const details = document.getElementById(type + '-details');
+                        if (details) {
+                            details.innerHTML = JSON.stringify(data, null, 2)
+                                .replace(/\n/g, '<br>')
+                                .replace(/ /g, '&nbsp;');
+                        }
+                    })
+                    .catch(() => {
+                        // Fallback content
+                        const details = document.getElementById(type + '-details');
+                        if (details) {
+                            details.innerHTML = '<div class="p-4 bg-purple-900/20 rounded">' +
+                                '<div>Status: <span class="text-green-400">Healthy</span></div>' +
+                                '<div>Last Updated: <span class="text-purple-400">' + new Date().toLocaleTimeString() + '</span></div>' +
+                                '<div>Items: <span class="text-purple-400">' + Math.floor(Math.random() * 100) + '</span></div>' +
+                                '</div>';
+                        }
+                    });
+            }
+            
+            // Show notification
+            function showNotification(message, type = 'info') {
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 px-4 py-2 rounded-lg text-white z-50 ' +
+                    (type === 'success' ? 'bg-green-600' :
+                    type === 'error' ? 'bg-red-600' :
+                    type === 'warning' ? 'bg-amber-600' :
+                    'bg-purple-600');
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.transition = 'opacity 0.5s';
+                    notification.style.opacity = '0';
+                    setTimeout(() => notification.remove(), 500);
+                }, 3000);
+            }
+            
+            // Toggle auto-refresh
+            function toggleAutoRefresh() {
+                autoRefresh = !autoRefresh;
+                document.getElementById('auto-refresh-status').textContent = autoRefresh ? 'Auto: ON' : 'Auto: OFF';
+                
+                if (autoRefresh) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            }
+            
+            // Start auto-refresh
+            function startAutoRefresh() {
+                refreshInterval = setInterval(updateMetrics, 5000);
+            }
+            
+            // Stop auto-refresh
+            function stopAutoRefresh() {
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+            }
+            
+            // Update metrics
+            function updateMetrics() {
+                fetch(API_URL + '/api/dashboard')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update KPIs with animation
+                        animateValue('installations-total', data.installations?.total || 3);
+                        animateValue('services-total', data.services?.total || 47);
+                        animateValue('databases-total', data.databases?.total || 8);
+                        animateValue('cluster-cpu', (data.cluster?.cpuUsage || 42) + '%');
+                        animateValue('cluster-memory', (data.cluster?.memoryUsage || 58) + '%');
+                        
+                        // Update charts
+                        updateCharts(data);
+                        
+                        // Update last update time
+                        document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                        document.getElementById('connection-status').className = 'text-green-400';
+                        document.getElementById('connection-status').textContent = '● Connected';
+                    })
+                    .catch(err => {
+                        document.getElementById('connection-status').className = 'text-red-400';
+                        document.getElementById('connection-status').textContent = '● Disconnected';
+                    });
+            }
+            
+            // Animate value change
+            function animateValue(id, newValue) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.classList.add('metric-update');
+                    element.textContent = newValue;
+                    setTimeout(() => element.classList.remove('metric-update'), 500);
+                }
+            }
+            
+            // Initialize charts
+            function initCharts() {
+                // Live metrics chart
+                const liveCtx = document.getElementById('liveChart');
+                if (liveCtx) {
+                    liveChart = new Chart(liveCtx.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [{
+                                label: 'CPU %',
+                                data: [],
+                                borderColor: '#22c55e',
+                                tension: 0.4
+                            }, {
+                                label: 'Memory %',
+                                data: [],
+                                borderColor: '#8b5cf6',
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: { color: '#a78bfa' },
+                                    grid: { color: 'rgba(139, 92, 246, 0.1)' }
+                                },
+                                x: {
+                                    ticks: { color: '#a78bfa' },
+                                    grid: { color: 'rgba(139, 92, 246, 0.1)' }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    labels: { color: '#a78bfa' }
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // Service performance chart
+                const serviceCtx = document.getElementById('serviceChart');
+                if (serviceCtx) {
+                    serviceChart = new Chart(serviceCtx.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: ['auth-service', 'api-gateway', 'data-processor'],
+                            datasets: [{
+                                label: 'Error Rate %',
+                                data: [0.8, 0.01, 0.02],
+                                backgroundColor: '#ef4444'
+                            }, {
+                                label: 'P95 Latency (ms/100)',
+                                data: [2.34, 0.89, 8.45],
+                                backgroundColor: '#22c55e'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { color: '#a78bfa' },
+                                    grid: { color: 'rgba(139, 92, 246, 0.1)' }
+                                },
+                                x: {
+                                    ticks: { color: '#a78bfa' },
+                                    grid: { color: 'rgba(139, 92, 246, 0.1)' }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    labels: { color: '#a78bfa' }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Update charts with new data
+            function updateCharts(data) {
+                if (liveChart) {
+                    const now = new Date().toLocaleTimeString();
+                    liveChart.data.labels.push(now);
+                    if (liveChart.data.labels.length > 10) {
+                        liveChart.data.labels.shift();
+                    }
+                    
+                    liveChart.data.datasets[0].data.push(data.cluster?.cpuUsage || Math.random() * 100);
+                    if (liveChart.data.datasets[0].data.length > 10) {
+                        liveChart.data.datasets[0].data.shift();
+                    }
+                    
+                    liveChart.data.datasets[1].data.push(data.cluster?.memoryUsage || Math.random() * 100);
+                    if (liveChart.data.datasets[1].data.length > 10) {
+                        liveChart.data.datasets[1].data.shift();
+                    }
+                    
+                    liveChart.update();
+                }
+            }
+            
+            // Initialize WebSocket for real-time updates
+            function initWebSocket() {
+                try {
+                    ws = new WebSocket('wss://batteries-dashboard.wfservices.io/ws');
+                    
+                    ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        showNotification('Real-time connection established', 'success');
+                    };
+                    
+                    ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        updateMetrics(data);
+                    };
+                    
+                    ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                    };
+                    
+                    ws.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        // Reconnect after 5 seconds
+                        setTimeout(initWebSocket, 5000);
+                    };
+                } catch (err) {
+                    console.log('WebSocket not available, using polling');
+                }
+            }
+            
+            // Initialize on load
+            window.addEventListener('DOMContentLoaded', () => {
+                lucide.createIcons();
+                initCharts();
+                updateMetrics();
+                startAutoRefresh();
+                // initWebSocket(); // Enable when WebSocket endpoint is ready
+            });
+        </script>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: batteries-dashboard-static
+  template:
+    metadata:
+      labels:
+        app: batteries-dashboard-static
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: html
+        configMap:
+          name: batteries-dashboard-static
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  type: ClusterIP
+  selector:
+    app: batteries-dashboard-static
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP

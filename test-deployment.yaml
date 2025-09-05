@@ -1,0 +1,118 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: batteries-test
+  labels:
+    app: batteries-included
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-control-server
+  namespace: batteries-test
+  labels:
+    app: test-control-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-control-server
+  template:
+    metadata:
+      labels:
+        app: test-control-server
+    spec:
+      containers:
+      - name: control-server
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: CLUSTER_NAME
+          value: "batteries-included-aks"
+        - name: CLUSTER_TYPE
+          value: "azure"
+        - name: MESSAGE
+          value: "Batteries Included on Azure AKS is running!"
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      initContainers:
+      - name: setup
+        image: busybox
+        command: ['sh', '-c', 'echo "<html><body><h1>Batteries Included on Azure</h1><p>Cluster: $CLUSTER_NAME</p><p>Type: $CLUSTER_TYPE</p><p>Status: Running</p></body></html>" > /usr/share/nginx/html/index.html']
+        env:
+        - name: CLUSTER_NAME
+          value: "batteries-included-aks"
+        - name: CLUSTER_TYPE
+          value: "azure"
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-control-server
+  namespace: batteries-test
+spec:
+  selector:
+    app: test-control-server
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-test
+  namespace: batteries-test
+  labels:
+    app: postgres-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-test
+  template:
+    metadata:
+      labels:
+        app: postgres-test
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: "batteries"
+        - name: POSTGRES_USER
+          value: "batteries"
+        - name: POSTGRES_PASSWORD
+          value: "batteries123"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-test
+  namespace: batteries-test
+spec:
+  selector:
+    app: postgres-test
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP

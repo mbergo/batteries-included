@@ -1,0 +1,397 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Batteries Dashboard - Azure Kubernetes</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+            * { font-family: 'Inter', sans-serif; }
+            
+            body {
+                background: #000000;
+            }
+            
+            @keyframes float {
+                0%, 100% { transform: translateY(0px); }
+                50% { transform: translateY(-10px); }
+            }
+            
+            .glass {
+                background: rgba(139, 92, 246, 0.05);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(139, 92, 246, 0.2);
+            }
+            
+            .glass-dark {
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(139, 92, 246, 0.3);
+            }
+            
+            .glow-purple {
+                box-shadow: 0 0 30px -5px rgba(139, 92, 246, 0.5);
+            }
+            
+            .glow-green {
+                box-shadow: 0 0 20px -5px rgba(34, 197, 94, 0.4);
+            }
+            
+            .float-animation {
+                animation: float 3s ease-in-out infinite;
+            }
+            
+            .text-glow-purple {
+                text-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+            }
+            
+            .bar-green {
+                background: linear-gradient(135deg, #22c55e, #16a34a);
+            }
+        </style>
+    </head>
+    <body class="bg-black text-white min-h-screen">
+        <!-- Header -->
+        <header class="glass-dark border-b border-purple-600/30">
+            <div class="container mx-auto px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center glow-purple">
+                            <span class="text-white font-bold text-xl">⚡</span>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-purple-400 text-glow-purple">
+                                Batteries Dashboard
+                            </h1>
+                            <p class="text-xs text-purple-500/80">Azure Kubernetes Service</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="px-3 py-1 rounded-full bg-black/50 border border-purple-500/50 text-xs text-purple-300">
+                            🌐 Azure
+                        </span>
+                        <span class="px-3 py-1 rounded-full bg-black/50 border border-purple-500/50 text-xs text-purple-300">
+                            📍 East US
+                        </span>
+                        <span class="px-3 py-1 rounded-full bg-black/50 border border-green-500/50 text-xs text-green-400 glow-green">
+                            ✅ Healthy
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <div class="container mx-auto px-6 py-8">
+            <!-- Hero Section -->
+            <div class="mb-8">
+                <h2 class="text-4xl font-bold mb-2 text-purple-400 text-glow-purple">
+                    Cluster Overview
+                </h2>
+                <p class="text-purple-500/70">Real-time monitoring for batteries-included-aks</p>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Cluster Health -->
+                <div class="glass-dark rounded-xl p-6 glow-purple float-animation">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-purple-400">Cluster Health</h3>
+                        <span class="w-3 h-3 bg-green-500 rounded-full animate-pulse glow-green"></span>
+                    </div>
+                    <div class="text-3xl font-bold text-purple-300">Healthy</div>
+                    <div class="text-sm text-purple-500/70 mt-2">All systems operational</div>
+                </div>
+
+                <!-- Nodes -->
+                <div class="glass-dark rounded-xl p-6 border border-purple-600/30">
+                    <h3 class="text-purple-400 mb-4">Nodes</h3>
+                    <div class="text-3xl font-bold text-purple-300">2</div>
+                    <div class="w-full bg-black/50 rounded-full h-2 mt-4">
+                        <div class="bar-green h-2 rounded-full" style="width: 100%"></div>
+                    </div>
+                    <div class="text-sm text-purple-500/70 mt-2">2/2 Ready</div>
+                </div>
+
+                <!-- Pods -->
+                <div class="glass-dark rounded-xl p-6 border border-purple-600/30">
+                    <h3 class="text-purple-400 mb-4">Pods Running</h3>
+                    <div class="text-3xl font-bold text-purple-300">47</div>
+                    <div class="w-full bg-black/50 rounded-full h-2 mt-4">
+                        <div class="bar-green h-2 rounded-full" style="width: 94%"></div>
+                    </div>
+                    <div class="text-sm text-purple-500/70 mt-2">47/50 Running</div>
+                </div>
+
+                <!-- Services -->
+                <div class="glass-dark rounded-xl p-6 border border-purple-600/30">
+                    <h3 class="text-purple-400 mb-4">Services</h3>
+                    <div class="text-3xl font-bold text-purple-300">12</div>
+                    <div class="w-full bg-black/50 rounded-full h-2 mt-4">
+                        <div class="bar-green h-2 rounded-full" style="width: 100%"></div>
+                    </div>
+                    <div class="text-sm text-purple-500/70 mt-2">All services active</div>
+                </div>
+            </div>
+
+            <!-- Resource Usage -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- CPU Usage -->
+                <div class="glass-dark rounded-xl p-6 border border-purple-600/30">
+                    <h3 class="text-purple-400 mb-6">CPU Usage</h3>
+                    <canvas id="cpuChart"></canvas>
+                </div>
+
+                <!-- Memory Usage -->
+                <div class="glass-dark rounded-xl p-6 border border-purple-600/30">
+                    <h3 class="text-purple-400 mb-6">Memory Usage</h3>
+                    <canvas id="memoryChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Namespaces Grid -->
+            <div class="mb-8">
+                <h3 class="text-2xl font-bold text-purple-400 mb-6 text-glow-purple">Namespaces</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 hover:glow-purple transition-all">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-300 font-medium">battery-core</span>
+                            <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                        </div>
+                        <div class="text-sm text-purple-500/70">15 pods • 4 services</div>
+                    </div>
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 hover:glow-purple transition-all">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-300 font-medium">kube-system</span>
+                            <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                        </div>
+                        <div class="text-sm text-purple-500/70">8 pods • 2 services</div>
+                    </div>
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 hover:glow-purple transition-all">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-300 font-medium">istio-system</span>
+                            <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                        </div>
+                        <div class="text-sm text-purple-500/70">12 pods • 3 services</div>
+                    </div>
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30 hover:glow-purple transition-all">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-purple-300 font-medium">cnpg-system</span>
+                            <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                        </div>
+                        <div class="text-sm text-purple-500/70">3 pods • 1 service</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deployments -->
+            <div class="glass-dark rounded-xl p-6 border border-purple-600/30 mb-8">
+                <h3 class="text-xl font-bold text-purple-400 mb-6">Active Deployments</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 bg-black/50 rounded-lg border border-purple-600/20">
+                        <div class="flex items-center gap-4">
+                            <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                            <span class="text-purple-300">batteries-dashboard-static</span>
+                        </div>
+                        <div class="flex items-center gap-6 text-sm">
+                            <span class="text-purple-500/70">Replicas: 2/2</span>
+                            <span class="text-green-400">Ready</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-black/50 rounded-lg border border-purple-600/20">
+                        <div class="flex items-center gap-4">
+                            <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                            <span class="text-purple-300">cloudnative-pg-operator</span>
+                        </div>
+                        <div class="flex items-center gap-6 text-sm">
+                            <span class="text-purple-500/70">Replicas: 1/1</span>
+                            <span class="text-green-400">Ready</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-black/50 rounded-lg border border-purple-600/20">
+                        <div class="flex items-center gap-4">
+                            <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                            <span class="text-purple-300">istio-cni-node</span>
+                        </div>
+                        <div class="flex items-center gap-6 text-sm">
+                            <span class="text-purple-500/70">Replicas: 2/2</span>
+                            <span class="text-green-400">Ready</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal -->
+            <div class="glass-dark rounded-xl p-6 border border-purple-600/30">
+                <h3 class="text-xl font-bold text-purple-400 mb-4">Terminal Output</h3>
+                <div class="bg-black rounded-lg p-4 font-mono text-sm">
+                    <div class="text-green-400">$ kubectl get nodes</div>
+                    <div class="text-purple-300/80 mt-2">
+                        NAME                                STATUS   ROLES   AGE   VERSION<br/>
+                        aks-nodepool1-12345678-vmss000000   Ready    agent   2h    v1.27.7<br/>
+                        aks-nodepool1-12345678-vmss000001   Ready    agent   2h    v1.27.7
+                    </div>
+                    <div class="text-green-400 mt-4">$ kubectl get pods -n battery-core</div>
+                    <div class="text-purple-300/80 mt-2">
+                        NAME                                         READY   STATUS    RESTARTS   AGE<br/>
+                        batteries-dashboard-static-d6df98997-dvq9j   1/1     Running   0          5m<br/>
+                        batteries-dashboard-static-d6df98997-gwjz6   1/1     Running   0          5m
+                    </div>
+                    <div class="flex items-center mt-4">
+                        <span class="text-green-400">$</span>
+                        <span class="ml-2 w-2 h-4 bg-purple-400 animate-pulse"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // CPU Chart
+            const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+            new Chart(cpuCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Node 1', 'Node 2', 'Average'],
+                    datasets: [{
+                        label: 'CPU Usage %',
+                        data: [45, 52, 48.5],
+                        backgroundColor: '#22c55e',
+                        borderColor: '#16a34a',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#a78bfa'
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                color: '#a78bfa'
+                            },
+                            grid: {
+                                color: 'rgba(139, 92, 246, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#a78bfa'
+                            },
+                            grid: {
+                                color: 'rgba(139, 92, 246, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Memory Chart
+            const memCtx = document.getElementById('memoryChart').getContext('2d');
+            new Chart(memCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Node 1', 'Node 2', 'Average'],
+                    datasets: [{
+                        label: 'Memory Usage %',
+                        data: [62, 58, 60],
+                        backgroundColor: '#22c55e',
+                        borderColor: '#16a34a',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#a78bfa'
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                color: '#a78bfa'
+                            },
+                            grid: {
+                                color: 'rgba(139, 92, 246, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#a78bfa'
+                            },
+                            grid: {
+                                color: 'rgba(139, 92, 246, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        </script>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: batteries-dashboard-static
+  template:
+    metadata:
+      labels:
+        app: batteries-dashboard-static
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: html
+        configMap:
+          name: batteries-dashboard-static
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  type: LoadBalancer
+  selector:
+    app: batteries-dashboard-static
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP

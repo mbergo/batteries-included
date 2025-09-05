@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 270 95% 75%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 270 50% 40%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 270 80% 60%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 270 95% 75%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background: linear-gradient(to bottom, #0a0a0a, #18181b);
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  /* Glassmorphism effect */
+  .glass {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10;
+  }
+  
+  .glass-darker {
+    @apply bg-black/40 backdrop-blur-xl border border-white/5;
+  }
+  
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent;
+  }
+  
+  /* Purple glow effects */
+  .glow-purple {
+    box-shadow: 0 0 30px -5px rgba(168, 85, 247, 0.4);
+  }
+  
+  .glow-purple-intense {
+    box-shadow: 
+      0 0 30px -5px rgba(168, 85, 247, 0.6),
+      0 0 60px -10px rgba(168, 85, 247, 0.4),
+      0 0 90px -15px rgba(168, 85, 247, 0.2);
+  }
+  
+  /* Animated gradient background */
+  .gradient-bg {
+    background: linear-gradient(
+      -45deg, 
+      #0a0a0a, 
+      #18181b, 
+      #3b0764, 
+      #581c87,
+      #3b0764,
+      #18181b,
+      #0a0a0a
+    );
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+  
+  /* Mesh pattern overlay */
+  .mesh-overlay {
+    position: relative;
+  }
+  
+  .mesh-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(168, 85, 247, 0.03) 10px,
+      rgba(168, 85, 247, 0.03) 20px
+    );
+    pointer-events: none;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #6b21a8, #9333ea);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #7e22ce, #a855f7);
+}
+
+/* Terminal styling */
+.terminal {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  background: #0a0a0a;
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  color: #a855f7;
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}

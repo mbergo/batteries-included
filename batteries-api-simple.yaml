@@ -1,0 +1,228 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batteries-api-data
+  namespace: battery-core
+data:
+  api.json: |
+    {
+      "installations": {
+        "total": 3,
+        "healthy": 2,
+        "degraded": 1,
+        "offline": 0
+      },
+      "services": {
+        "total": 47,
+        "uptime": 99.2,
+        "errorRate": 0.02,
+        "p95Latency": 145,
+        "deployments": 3
+      },
+      "databases": {
+        "total": 8,
+        "allSynced": true,
+        "backupStatus": "Completed",
+        "replicationLag": 0,
+        "nextBackupHours": 2
+      },
+      "cluster": {
+        "cpuUsage": 42,
+        "memoryUsage": 58,
+        "nodes": 2,
+        "nodesReady": 2
+      },
+      "security": {
+        "status": "OK",
+        "certificatesOk": true,
+        "ssoActive": true,
+        "certExpireDays": 82
+      },
+      "projects": [
+        {"name": "batteries-core", "version": "v2.1.0", "status": "Running", "health": "Healthy"},
+        {"name": "ml-workspace", "version": "v1.0.0", "status": "Deploying", "health": "Degraded"},
+        {"name": "api-gateway", "version": "v1.8.3", "status": "Running", "health": "Healthy"}
+      ],
+      "namespaces": [
+        {"name": "battery-core", "cpuUsage": 45, "memoryUsage": 62, "podCount": 15, "serviceCount": 4},
+        {"name": "istio-system", "cpuUsage": 32, "memoryUsage": 45, "podCount": 12, "serviceCount": 3},
+        {"name": "cnpg-system", "cpuUsage": 18, "memoryUsage": 22, "podCount": 3, "serviceCount": 1},
+        {"name": "kube-system", "cpuUsage": 28, "memoryUsage": 38, "podCount": 8, "serviceCount": 2}
+      ],
+      "serviceMetrics": [
+        {"name": "auth-service", "errorRate": 0.8, "p95Latency": 234},
+        {"name": "data-processor", "errorRate": 0.02, "p95Latency": 845},
+        {"name": "webhook-handler", "errorRate": 0.5, "p95Latency": 123},
+        {"name": "api-gateway", "errorRate": 0.01, "p95Latency": 89},
+        {"name": "ml-inference", "errorRate": 0.03, "p95Latency": 567}
+      ],
+      "databaseMetrics": [
+        {
+          "name": "postgres-main",
+          "type": "PostgreSQL",
+          "status": "Ready",
+          "cpuUsage": 12,
+          "memoryUsage": 45,
+          "connections": 24,
+          "maxConnections": 100,
+          "cacheHitRate": 98.2,
+          "replicationLag": 0,
+          "lastBackup": "2h ago"
+        },
+        {
+          "name": "redis-cache",
+          "type": "Redis",
+          "status": "Ready",
+          "cpuUsage": 8,
+          "memoryUsage": 22,
+          "connections": 145,
+          "maxConnections": 500,
+          "cacheHitRate": 99.1,
+          "replicationLag": 0,
+          "lastBackup": "N/A"
+        },
+        {
+          "name": "mongo-analytics",
+          "type": "MongoDB",
+          "status": "Degraded",
+          "cpuUsage": 78,
+          "memoryUsage": 82,
+          "connections": 89,
+          "maxConnections": 100,
+          "cacheHitRate": 87.3,
+          "replicationLag": 4200,
+          "lastBackup": "4h ago"
+        }
+      ],
+      "alerts": [
+        {
+          "type": "warning",
+          "severity": "medium",
+          "message": "High Memory Usage",
+          "source": "mongo-analytics",
+          "timestamp": "2025-09-05T03:15:00Z"
+        },
+        {
+          "type": "info",
+          "severity": "low",
+          "message": "Scheduled Maintenance",
+          "source": "system",
+          "timestamp": "2025-09-05T01:30:00Z"
+        }
+      ],
+      "recentActivity": [
+        {"type": "deployment", "message": "Deployment completed", "timestamp": "2025-09-05T03:25:00Z"},
+        {"type": "scaling", "message": "Auto-scaling triggered", "timestamp": "2025-09-05T03:18:00Z"},
+        {"type": "backup", "message": "Backup completed", "timestamp": "2025-09-05T01:30:00Z"}
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batteries-api
+  namespace: battery-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: batteries-api
+  template:
+    metadata:
+      labels:
+        app: batteries-api
+    spec:
+      containers:
+      - name: api-server
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: api-data
+          mountPath: /usr/share/nginx/html/api
+        - name: nginx-conf
+          mountPath: /etc/nginx/conf.d
+        resources:
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+      volumes:
+      - name: api-data
+        configMap:
+          name: batteries-api-data
+          items:
+          - key: api.json
+            path: dashboard.json
+      - name: nginx-conf
+        configMap:
+          name: batteries-api-nginx-conf
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batteries-api-nginx-conf
+  namespace: battery-core
+data:
+  default.conf: |
+    server {
+        listen 80;
+        
+        location /api/dashboard {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+            add_header 'Content-Type' 'application/json';
+            
+            if ($request_method = 'OPTIONS') {
+                return 204;
+            }
+            
+            alias /usr/share/nginx/html/api/dashboard.json;
+        }
+        
+        location /api/services {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+            add_header 'Content-Type' 'application/json';
+            
+            if ($request_method = 'OPTIONS') {
+                return 204;
+            }
+            
+            alias /usr/share/nginx/html/api/dashboard.json;
+        }
+        
+        location /api/databases {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
+            add_header 'Content-Type' 'application/json';
+            
+            if ($request_method = 'OPTIONS') {
+                return 204;
+            }
+            
+            alias /usr/share/nginx/html/api/dashboard.json;
+        }
+        
+        location /api/health {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Content-Type' 'application/json';
+            return 200 '{"status": "healthy"}';
+        }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batteries-api
+  namespace: battery-core
+spec:
+  type: LoadBalancer
+  selector:
+    app: batteries-api
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP

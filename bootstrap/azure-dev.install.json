@@ -1,17 +1,23 @@
 {
   "control_jwk": {
     "crv": "P-256",
-    "d": "azure_dev_key_placeholder_replace_with_real_key",
+    "d": "kp2fZYJuUFtwnMNgLl9I1EDcT6kjgbmtSlLRVBvhCrc=",
     "kty": "EC",
-    "x": "azure_dev_x_placeholder_replace_with_real_value",
-    "y": "azure_dev_y_placeholder_replace_with_real_value"
+    "x": "ml7VmL2okTllkXYiC64+kxDYbdj24370bUfzb9ixKtg",
+    "y": "OwuTEvKqyrbOs1dEUzPk2jGLyTacBexISWFPZIlZJEc"
   },
   "default_size": "small",
   "deleted_at": null,
-  "id": "batt_azure_dev_install_id_placeholder",
+  "id": "a3d9ea99-326f-4b25-a578-42883a8eda4a",
   "inserted_at": null,
   "kube_provider": "azure",
-  "kube_provider_config": {},
+  "kube_provider_config": {
+    "resource_group": "batteries-included-rg",
+    "cluster_name": "batteries-included-aks",
+    "location": "eastus",
+    "subscription_id": "30f5d7ee-3f24-4dac-a2f8-05d207931847",
+    "tenant_id": "e20505db-b56f-4701-ae6b-70e4481189b5"
+  },
   "slug": "azure-dev",
   "team_id": "batt_0198f3777ee67f649fe3819852d4ea20",
   "updated_at": null,

@@ -1,0 +1,893 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Batteries Included - Control Plane Dashboard</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://unpkg.com/lucide@latest"></script>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+            * { font-family: 'Inter', sans-serif; }
+            
+            body { background: #000000; }
+            
+            .glass-dark {
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(139, 92, 246, 0.2);
+            }
+            
+            .glow-purple {
+                box-shadow: 0 0 20px -5px rgba(139, 92, 246, 0.4);
+            }
+            
+            .glow-green {
+                box-shadow: 0 0 15px -5px rgba(34, 197, 94, 0.4);
+            }
+            
+            .glow-amber {
+                box-shadow: 0 0 15px -5px rgba(245, 158, 11, 0.4);
+            }
+            
+            .glow-red {
+                box-shadow: 0 0 15px -5px rgba(239, 68, 68, 0.4);
+            }
+            
+            .bar-green {
+                background: linear-gradient(135deg, #22c55e, #16a34a);
+            }
+            
+            .bar-amber {
+                background: linear-gradient(135deg, #f59e0b, #d97706);
+            }
+            
+            .bar-red {
+                background: linear-gradient(135deg, #ef4444, #dc2626);
+            }
+            
+            .text-glow-purple {
+                text-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+            }
+        </style>
+    </head>
+    <body class="bg-black text-white min-h-screen">
+        <!-- Header with Global Context Controls -->
+        <header class="glass-dark border-b border-purple-600/30">
+            <div class="container mx-auto px-6 py-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center glow-purple">
+                            <span class="text-white font-bold text-lg">⚡</span>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold text-purple-400 text-glow-purple">
+                                Batteries Included Control Plane
+                            </h1>
+                            <p class="text-xs text-purple-500/70">Azure Kubernetes Service • East US</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Global Scope Controls -->
+                    <div class="flex items-center gap-3">
+                        <!-- Team Selector -->
+                        <select class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 text-sm text-purple-300 focus:border-purple-400 focus:outline-none">
+                            <option>Team: Platform</option>
+                            <option>Team: DevOps</option>
+                            <option>Team: Data</option>
+                        </select>
+                        
+                        <!-- Environment Selector -->
+                        <select class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 text-sm text-purple-300 focus:border-purple-400 focus:outline-none">
+                            <option>Env: Production</option>
+                            <option>Env: Staging</option>
+                            <option>Env: Development</option>
+                        </select>
+                        
+                        <!-- Namespace Selector -->
+                        <select class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 text-sm text-purple-300 focus:border-purple-400 focus:outline-none">
+                            <option>Namespace: All</option>
+                            <option>battery-core</option>
+                            <option>istio-system</option>
+                            <option>cnpg-system</option>
+                        </select>
+                        
+                        <!-- Time Range -->
+                        <select class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 text-sm text-purple-300 focus:border-purple-400 focus:outline-none">
+                            <option>Last 1h</option>
+                            <option>Last 6h</option>
+                            <option>Last 24h</option>
+                            <option>Last 7d</option>
+                        </select>
+                        
+                        <!-- Quick Search -->
+                        <div class="relative">
+                            <input type="text" placeholder="Search resources..." 
+                                   class="bg-black/50 border border-purple-500/30 rounded px-3 py-1 pr-8 text-sm text-purple-300 placeholder-purple-600/50 focus:border-purple-400 focus:outline-none w-48">
+                            <i data-lucide="search" class="absolute right-2 top-1.5 w-4 h-4 text-purple-500/50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <div class="container mx-auto px-6 py-6">
+            
+            <!-- Top KPI Strip -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <!-- Installations -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Installations</span>
+                        <i data-lucide="server" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span class="text-2xl font-bold text-purple-300">3</span>
+                        <div class="flex gap-2 text-xs">
+                            <span class="text-green-400">2 healthy</span>
+                            <span class="text-amber-400">1 degraded</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 w-full bg-black/50 rounded-full h-1.5 flex gap-0.5">
+                        <div class="bar-green h-1.5 rounded-l-full" style="width: 66%"></div>
+                        <div class="bar-amber h-1.5" style="width: 34%"></div>
+                    </div>
+                </div>
+
+                <!-- Services -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Services</span>
+                        <i data-lucide="activity" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span class="text-2xl font-bold text-purple-300">47</span>
+                        <div class="flex gap-2 text-xs">
+                            <span class="text-green-400">99.2% up</span>
+                            <span class="text-purple-500/70">3 deploys</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        Error rate: <span class="text-green-400">0.02%</span> • P95: <span class="text-green-400">145ms</span>
+                    </div>
+                </div>
+
+                <!-- Databases -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Databases</span>
+                        <i data-lucide="database" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span class="text-2xl font-bold text-purple-300">8</span>
+                        <div class="flex gap-2 text-xs">
+                            <span class="text-green-400">All synced</span>
+                            <span class="text-purple-500/70">Backed up</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        Lag: <span class="text-green-400">0ms</span> • Next backup: <span class="text-purple-300">2h</span>
+                    </div>
+                </div>
+
+                <!-- Cluster Capacity -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Cluster</span>
+                        <i data-lucide="cpu" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <div class="text-xs text-purple-500/70 mb-1">CPU</div>
+                            <div class="text-lg font-bold text-green-400">42%</div>
+                        </div>
+                        <div class="flex-1">
+                            <div class="text-xs text-purple-500/70 mb-1">Memory</div>
+                            <div class="text-lg font-bold text-green-400">58%</div>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        2 nodes • <span class="text-green-400">All ready</span>
+                    </div>
+                </div>
+
+                <!-- Security -->
+                <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-purple-400 text-sm font-medium">Security</span>
+                        <i data-lucide="shield" class="w-4 h-4 text-purple-500/50"></i>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <span class="text-2xl font-bold text-green-400">OK</span>
+                        <div class="text-xs text-purple-500/70">All secure</div>
+                    </div>
+                    <div class="mt-2 text-xs text-purple-500/70">
+                        Certs valid • SSO: <span class="text-green-400">Active</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cluster Health Overview -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Node & Pod Health -->
+                <div class="glass-dark rounded-xl p-5 border border-purple-600/30" style="max-height: 280px;">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-purple-400 font-medium">Cluster Health</h3>
+                        <button class="text-xs text-purple-500/70 hover:text-purple-400 flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                            Open in Grafana
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <!-- Node Status -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">Node CPU Pressure</span>
+                            <div class="flex items-center gap-2">
+                                <div class="w-32 bg-black/50 rounded-full h-2">
+                                    <div class="bar-green h-2 rounded-full" style="width: 42%"></div>
+                                </div>
+                                <span class="text-xs text-green-400">Normal</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">Node Memory Pressure</span>
+                            <div class="flex items-center gap-2">
+                                <div class="w-32 bg-black/50 rounded-full h-2">
+                                    <div class="bar-green h-2 rounded-full" style="width: 58%"></div>
+                                </div>
+                                <span class="text-xs text-green-400">Normal</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">Pod Restarts (24h)</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-amber-400 text-sm font-medium">3</span>
+                                <button class="text-xs text-purple-500/70 hover:text-purple-400">View</button>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">API Server Latency</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-green-400 text-sm font-medium">12ms</span>
+                                <span class="text-xs text-purple-500/70">P95</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resource Usage by Namespace -->
+                <div class="glass-dark rounded-xl p-5 border border-purple-600/30" style="max-height: 280px;">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-purple-400 font-medium">Namespace Resources</h3>
+                        <button class="text-xs text-purple-500/70 hover:text-purple-400 flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                            Full View
+                        </button>
+                    </div>
+                    <div style="position: relative; height: 150px;">
+                        <canvas id="namespaceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Projects and Services Section -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-purple-400">Projects & Services</h3>
+                    <div class="flex gap-2">
+                        <button class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/30">
+                            <i data-lucide="plus" class="w-3 h-3 inline mr-1"></i>New Project
+                        </button>
+                        <button class="px-3 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Active Projects -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <h4 class="text-purple-400 text-sm font-medium mb-3">Active Projects</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-2 bg-black/30 rounded border border-purple-600/20">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                                    <div>
+                                        <span class="text-purple-300 text-sm">batteries-core</span>
+                                        <span class="text-xs text-purple-500/70 ml-2">v2.1.0</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="text-green-400">Healthy</span>
+                                    <button class="text-purple-500/70 hover:text-purple-400">
+                                        <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-black/30 rounded border border-purple-600/20">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-2 h-2 bg-amber-500 rounded-full glow-amber"></span>
+                                    <div>
+                                        <span class="text-purple-300 text-sm">ml-workspace</span>
+                                        <span class="text-xs text-purple-500/70 ml-2">deploying...</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="text-amber-400">Deploying</span>
+                                    <button class="text-purple-500/70 hover:text-purple-400">
+                                        <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between p-2 bg-black/30 rounded border border-purple-600/20">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full glow-green"></span>
+                                    <div>
+                                        <span class="text-purple-300 text-sm">api-gateway</span>
+                                        <span class="text-xs text-purple-500/70 ml-2">v1.8.3</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs">
+                                    <span class="text-green-400">Healthy</span>
+                                    <button class="text-purple-500/70 hover:text-purple-400">
+                                        <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Services by Metrics -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <h4 class="text-purple-400 text-sm font-medium mb-3">Service Metrics</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-purple-500/70">Highest Error Rate</span>
+                                    <span class="text-red-400">auth-service (0.8%)</span>
+                                </div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-purple-500/70">Slowest P95</span>
+                                    <span class="text-amber-400">data-processor (845ms)</span>
+                                </div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-purple-500/70">Most 5xx Errors</span>
+                                    <span class="text-amber-400">webhook-handler (12)</span>
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-purple-600/20">
+                                <div class="text-xs text-purple-500/70 mb-2">Recent Autoscaling</div>
+                                <div class="space-y-1">
+                                    <div class="flex justify-between text-xs">
+                                        <span class="text-purple-300">api-gateway</span>
+                                        <span class="text-green-400">↑ 3 → 5 pods</span>
+                                    </div>
+                                    <div class="flex justify-between text-xs">
+                                        <span class="text-purple-300">ml-inference</span>
+                                        <span class="text-purple-400">↓ 4 → 2 pods</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 mt-3">
+                            <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                <i data-lucide="terminal" class="w-3 h-3 inline mr-1"></i>Logs
+                            </button>
+                            <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                <i data-lucide="trending-up" class="w-3 h-3 inline mr-1"></i>Scale
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Datastores Section -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-purple-400">Datastores</h3>
+                    <button class="text-xs text-purple-500/70 hover:text-purple-400 flex items-center gap-1">
+                        <i data-lucide="database" class="w-3 h-3"></i>
+                        Manage All
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- PostgreSQL Instance -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="database" class="w-4 h-4 text-purple-500"></i>
+                                <span class="text-purple-300 text-sm font-medium">postgres-main</span>
+                            </div>
+                            <span class="px-2 py-0.5 bg-green-900/30 border border-green-500/30 rounded text-xs text-green-400">Ready</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                                <span class="text-purple-500/70">CPU:</span>
+                                <span class="text-green-400 ml-1">12%</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Memory:</span>
+                                <span class="text-green-400 ml-1">45%</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Connections:</span>
+                                <span class="text-purple-300 ml-1">24/100</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Cache Hit:</span>
+                                <span class="text-green-400 ml-1">98.2%</span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-purple-600/20 text-xs">
+                            <div class="flex justify-between mb-1">
+                                <span class="text-purple-500/70">Replication Lag:</span>
+                                <span class="text-green-400">0ms</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Last Backup:</span>
+                                <span class="text-purple-300">2h ago</span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 mt-3">
+                            <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                Dashboard
+                            </button>
+                            <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                Console
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Redis Instance -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="zap" class="w-4 h-4 text-purple-500"></i>
+                                <span class="text-purple-300 text-sm font-medium">redis-cache</span>
+                            </div>
+                            <span class="px-2 py-0.5 bg-green-900/30 border border-green-500/30 rounded text-xs text-green-400">Ready</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                                <span class="text-purple-500/70">Memory:</span>
+                                <span class="text-green-400 ml-1">312MB</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Keys:</span>
+                                <span class="text-purple-300 ml-1">45.2K</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Ops/sec:</span>
+                                <span class="text-green-400 ml-1">1.2K</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Hit Rate:</span>
+                                <span class="text-green-400 ml-1">99.1%</span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-purple-600/20 text-xs">
+                            <div class="flex justify-between mb-1">
+                                <span class="text-purple-500/70">Evictions (24h):</span>
+                                <span class="text-green-400">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Persistence:</span>
+                                <span class="text-green-400">AOF enabled</span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 mt-3">
+                            <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                Dashboard
+                            </button>
+                            <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                CLI
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- MongoDB Instance -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="layers" class="w-4 h-4 text-purple-500"></i>
+                                <span class="text-purple-300 text-sm font-medium">mongo-analytics</span>
+                            </div>
+                            <span class="px-2 py-0.5 bg-amber-900/30 border border-amber-500/30 rounded text-xs text-amber-400">Degraded</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                                <span class="text-purple-500/70">CPU:</span>
+                                <span class="text-amber-400 ml-1">78%</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Memory:</span>
+                                <span class="text-amber-400 ml-1">82%</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Connections:</span>
+                                <span class="text-purple-300 ml-1">89/100</span>
+                            </div>
+                            <div>
+                                <span class="text-purple-500/70">Queue:</span>
+                                <span class="text-amber-400 ml-1">234</span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-purple-600/20 text-xs">
+                            <div class="flex justify-between mb-1">
+                                <span class="text-purple-500/70">Replication Lag:</span>
+                                <span class="text-amber-400">4.2s</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Issue:</span>
+                                <span class="text-amber-400">High load</span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 mt-3">
+                            <button class="flex-1 px-2 py-1 bg-amber-600/20 border border-amber-500/30 rounded text-xs text-amber-300 hover:bg-amber-600/30">
+                                Investigate
+                            </button>
+                            <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                                Scale
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI/ML Workspace (if enabled) -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-purple-400">AI/ML Workspace</h3>
+                    <span class="px-2 py-0.5 bg-purple-900/30 border border-purple-500/30 rounded text-xs text-purple-300">Beta</span>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Jupyter Status -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <div class="flex items-center gap-2 mb-3">
+                            <i data-lucide="book-open" class="w-4 h-4 text-purple-500"></i>
+                            <span class="text-purple-300 text-sm font-medium">Jupyter Hub</span>
+                        </div>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Status:</span>
+                                <span class="text-green-400">Running</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Active Kernels:</span>
+                                <span class="text-purple-300">3</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Memory Used:</span>
+                                <span class="text-green-400">2.4GB</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-3 px-2 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/30">
+                            Open Notebooks
+                        </button>
+                    </div>
+
+                    <!-- GPU Status -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <div class="flex items-center gap-2 mb-3">
+                            <i data-lucide="cpu" class="w-4 h-4 text-purple-500"></i>
+                            <span class="text-purple-300 text-sm font-medium">GPU Resources</span>
+                        </div>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Available:</span>
+                                <span class="text-purple-300">Not configured</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Queue:</span>
+                                <span class="text-purple-500/50">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Status:</span>
+                                <span class="text-purple-500/50">Disabled</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-3 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-500/50" disabled>
+                            Enable GPU
+                        </button>
+                    </div>
+
+                    <!-- Ollama Models -->
+                    <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                        <div class="flex items-center gap-2 mb-3">
+                            <i data-lucide="brain" class="w-4 h-4 text-purple-500"></i>
+                            <span class="text-purple-300 text-sm font-medium">Ollama Models</span>
+                        </div>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Loaded:</span>
+                                <span class="text-green-400">llama2:7b</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Memory:</span>
+                                <span class="text-green-400">4.1GB</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-500/70">Requests/h:</span>
+                                <span class="text-purple-300">142</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-3 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            Manage Models
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security & Networking -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Security Status -->
+                <div class="glass-dark rounded-xl p-5 border border-purple-600/30">
+                    <h3 class="text-purple-400 font-medium mb-4">Security & Compliance</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">TLS Certificates</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-green-400 text-sm">Valid</span>
+                                <span class="text-xs text-purple-500/70">Expires in 82d</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">Keycloak SSO</span>
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span class="text-green-400 text-sm">Active</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">Network Policies</span>
+                            <span class="text-purple-300 text-sm">12 active</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">Secrets Rotation</span>
+                            <span class="text-green-400 text-sm">Automated</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-purple-300">Audit Logging</span>
+                            <span class="text-green-400 text-sm">Enabled</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-4">
+                        <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="shield" class="w-3 h-3 inline mr-1"></i>Security Center
+                        </button>
+                        <button class="flex-1 px-2 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="key" class="w-3 h-3 inline mr-1"></i>Keycloak
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alerts & Incidents -->
+                <div class="glass-dark rounded-xl p-5 border border-purple-600/30">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-purple-400 font-medium">Active Alerts</h3>
+                        <button class="text-xs text-purple-500/70 hover:text-purple-400">View All</button>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-start gap-3 p-2 bg-amber-900/10 border border-amber-500/30 rounded">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 mt-0.5"></i>
+                            <div class="flex-1">
+                                <div class="text-sm text-amber-400">High Memory Usage</div>
+                                <div class="text-xs text-purple-500/70">mongo-analytics • 15 min ago</div>
+                            </div>
+                            <button class="text-xs text-purple-500/70 hover:text-purple-400">Ack</button>
+                        </div>
+                        <div class="flex items-start gap-3 p-2 bg-black/30 border border-purple-600/20 rounded">
+                            <i data-lucide="info" class="w-4 h-4 text-purple-500 mt-0.5"></i>
+                            <div class="flex-1">
+                                <div class="text-sm text-purple-300">Scheduled Maintenance</div>
+                                <div class="text-xs text-purple-500/70">Tomorrow 2:00 AM UTC</div>
+                            </div>
+                            <button class="text-xs text-purple-500/70 hover:text-purple-400">Dismiss</button>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-purple-600/20">
+                        <div class="text-xs text-purple-500/70 mb-2">Recent Activity</div>
+                        <div class="space-y-1 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-purple-300">Deployment completed</span>
+                                <span class="text-purple-500/70">5m ago</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-300">Auto-scaling triggered</span>
+                                <span class="text-purple-500/70">12m ago</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-purple-300">Backup completed</span>
+                                <span class="text-purple-500/70">2h ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions Bar -->
+            <div class="glass-dark rounded-lg p-4 border border-purple-600/30">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-purple-400">Suggested Actions</span>
+                    <div class="flex gap-2">
+                        <button class="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/30">
+                            <i data-lucide="download" class="w-3 h-3 inline mr-1"></i>Run Backup
+                        </button>
+                        <button class="px-3 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="user-plus" class="w-3 h-3 inline mr-1"></i>Invite Team Member
+                        </button>
+                        <button class="px-3 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="book" class="w-3 h-3 inline mr-1"></i>View Docs
+                        </button>
+                        <button class="px-3 py-1 bg-black/50 border border-purple-500/30 rounded text-xs text-purple-300 hover:bg-purple-600/20">
+                            <i data-lucide="settings" class="w-3 h-3 inline mr-1"></i>Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Initialize Lucide icons
+            lucide.createIcons();
+
+            // Namespace Resources Chart
+            const nsCtx = document.getElementById('namespaceChart').getContext('2d');
+            new Chart(nsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['battery-core', 'istio-system', 'cnpg-system', 'kube-system'],
+                    datasets: [
+                        {
+                            label: 'CPU %',
+                            data: [45, 32, 18, 28],
+                            backgroundColor: '#22c55e',
+                            borderColor: '#16a34a',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Memory %',
+                            data: [62, 45, 22, 38],
+                            backgroundColor: '#8b5cf6',
+                            borderColor: '#7c3aed',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#a78bfa',
+                                font: { size: 11 }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                color: '#a78bfa',
+                                font: { size: 10 }
+                            },
+                            grid: {
+                                color: 'rgba(139, 92, 246, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#a78bfa',
+                                font: { size: 10 }
+                            },
+                            grid: {
+                                color: 'rgba(139, 92, 246, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // API Configuration
+            const API_URL = 'http://135.234.159.207';
+            
+            // Fetch dashboard data from API
+            async function fetchDashboardData() {
+                try {
+                    const response = await fetch(`${API_URL}/api/dashboard`);
+                    const data = await response.json();
+                    updateDashboard(data);
+                } catch (error) {
+                    console.error('Failed to fetch dashboard data:', error);
+                }
+            }
+            
+            // Update dashboard with real data
+            function updateDashboard(data) {
+                // Update KPI cards
+                if (data.installations) {
+                    document.querySelector('.installations-total').textContent = data.installations.total;
+                    document.querySelector('.installations-healthy').textContent = data.installations.healthy + ' healthy';
+                    document.querySelector('.installations-degraded').textContent = data.installations.degraded + ' degraded';
+                }
+                
+                if (data.services) {
+                    document.querySelector('.services-total').textContent = data.services.total;
+                    document.querySelector('.services-uptime').textContent = data.services.uptime + '% up';
+                    document.querySelector('.services-error').textContent = data.services.errorRate + '%';
+                    document.querySelector('.services-latency').textContent = data.services.p95Latency + 'ms';
+                }
+                
+                if (data.cluster) {
+                    document.querySelector('.cluster-cpu').textContent = Math.round(data.cluster.cpuUsage) + '%';
+                    document.querySelector('.cluster-memory').textContent = Math.round(data.cluster.memoryUsage) + '%';
+                }
+            }
+            
+            // Auto-refresh every 5 seconds
+            setInterval(fetchDashboardData, 5000);
+            
+            // Initial fetch
+            fetchDashboardData();
+        </script>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: batteries-dashboard-static
+  template:
+    metadata:
+      labels:
+        app: batteries-dashboard-static
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: html
+        configMap:
+          name: batteries-dashboard-static
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batteries-dashboard-static
+  namespace: battery-core
+spec:
+  type: ClusterIP
+  selector:
+    app: batteries-dashboard-static
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
