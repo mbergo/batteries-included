@@ -4,7 +4,7 @@ TRACE=${TRACE-""}
 
 # If you are changing this also change the
 # version in mix.exs for all the apps in platform_umbrella
-export BASE_VERSION="1.4.0"
+export BASE_VERSION="1.5.0"
 
 export REGISTRY="ghcr.io/batteries-included"
 
@@ -21,6 +21,8 @@ safe_colors() {
 }
 
 setup_trace() {
+    # set TRACE if GHA debug logging is enabled
+    [[ ${RUNNER_DEBUG:-0} -eq 1 ]] && TRACE=1
     if [[ $TRACE -eq 1 ]]; then
         log "${GREEN}Tracing enabled${NOFORMAT}"
         set -x
@@ -117,20 +119,16 @@ in_github_action() {
 
 # delegate to elixir subcommand
 run_mix() {
-    "${SCRIPT_DIR}/bi-elixir" run "$@"
+    "${SCRIPT_DIR}/bix-elixir" run "$@"
 }
 
 # delegate to go subcommand
 run_bi() {
-    "${SCRIPT_DIR}/bi-go" run "$@"
+    "${SCRIPT_DIR}/bix-go" run "$@"
 }
 
 version_tag() {
     git describe --match="badtagthatnevermatches" --always --dirty
-}
-
-docker_hash() {
-    git rev-parse HEAD:docker
 }
 
 version_lte() {

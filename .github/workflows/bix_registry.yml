@@ -11,6 +11,7 @@ name: BIX Registry Update
 permissions:
   contents: write
   pull-requests: write
+  packages: read
 
 defaults:
   run:
@@ -31,6 +32,18 @@ jobs:
 
       - name: Setup CI
         uses: ./.github/actions/setup-ci
+        with:
+          reg_tool_cache: true
+
+      - name: Login to GHCR
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure registry-tool
+        run: bin/bix go ensure-registry-tool
 
       - name: Update registry and create PR
         run: bin/bix registry create-pr

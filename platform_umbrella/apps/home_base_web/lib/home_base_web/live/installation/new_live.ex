@@ -1,15 +1,20 @@
+alias CommonCore.ClusterType
+
 defmodule HomeBaseWeb.InstallationNewLive do
   @moduledoc false
   use HomeBaseWeb, :live_view
 
   use CommonCore.IncludeResource,
     aws_description: "priv/markdown/install/aws.md",
+    azure_description: "priv/markdown/install/azure.md",
     internal_description: "priv/markdown/install/internal.md",
     kind_description: "priv/markdown/install/kind.md",
     kitchen_sink_description: "priv/markdown/install/kitchen_sink.md",
     provided_description: "priv/markdown/install/provided.md"
 
   alias CommonCore.Installation
+  alias CommonCore.Size
+  alias CommonCore.Usage
   alias Ecto.Changeset
   alias HomeBase.CustomerInstalls
   alias HomeBaseWeb.UserAuth
@@ -91,7 +96,7 @@ defmodule HomeBaseWeb.InstallationNewLive do
               field={@form[:usage]}
               type="select"
               placeholder="Select usage type"
-              options={CommonCore.Installs.Options.usage_options(@current_role)}
+              options={Usage.options(@current_role)}
             />
           </.input_panel>
 
@@ -103,7 +108,7 @@ defmodule HomeBaseWeb.InstallationNewLive do
               field={@form[:kube_provider]}
               type="select"
               placeholder="Choose a provider"
-              options={CommonCore.Installs.Options.provider_options(@form[:usage].value)}
+              options={ClusterType.options()}
             />
           </.input_panel>
 
@@ -114,7 +119,7 @@ defmodule HomeBaseWeb.InstallationNewLive do
             <.input
               field={@form[:default_size]}
               type="select"
-              options={CommonCore.Installs.Options.size_options()}
+              options={Size.options()}
               phx-change="change-default-size"
             />
           </.input_panel>
@@ -176,6 +181,7 @@ defmodule HomeBaseWeb.InstallationNewLive do
   # providers
   def explanation_more(:kind), do: get_resource(:kind_description)
   def explanation_more(:aws), do: get_resource(:aws_description)
+  def explanation_more(:azure), do: get_resource(:azure_description)
   def explanation_more(:provided), do: get_resource(:provided_description)
 
   def explanation_more(_), do: ""

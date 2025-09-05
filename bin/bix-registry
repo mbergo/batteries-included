@@ -46,7 +46,7 @@ do_save_images() {
             docker.io/istio/*)
                 imgs+=("${img}:${tag}")
                 ;;
-            ghcr.io/cloudnative-pg/*)
+            ghcr.io/cloudnative-pg/cloudnative-pg)
                 imgs+=("${img}:${tag}")
                 ;;
             quay.io/frrouting/*)
@@ -65,7 +65,7 @@ do_save_images() {
     if [[ "$type" == all || "$type" == bi ]]; then
         # add our images
         local version
-        version=$(bi-docker get-image-tag)
+        version=$(bix-docker get-image-tag)
         for img in kube-bootstrap control-server home-base; do
             imgs+=("${REGISTRY}/${img}:${version}")
         done
@@ -90,13 +90,17 @@ do_list() {
 do_create_pr() {
     bi_pushd "${ROOT_DIR}/registry-tool" || exit 1
 
+    bix-go ensure-registry-tool
+    local registry_tool
+    registry_tool=$(bix-go registry-tool-location)
+
     # While running the two registry tools turn off set -e
     set +e
 
     local update_exit_code=0
     log "Running registry updates"
     update_exit_code=$(
-        go run registry-tool update-tags ${TRACE:+-v=debug} --delay 500ms --jitter 250ms ../image_registry.yaml
+        "${registry_tool}" update-tags ${TRACE:+-v=debug} --delay 500ms --jitter 250ms ../image_registry.yaml
         echo $?
     )
     [[ $update_exit_code -gt 1 ]] && die "Error updating tags"
@@ -104,7 +108,7 @@ do_create_pr() {
     local advance_exit_code=0
     log "Running registry advances"
     advance_exit_code=$(
-        go run registry-tool advance-defaults ${TRACE:+-v=debug} ../image_registry.yaml
+        "${registry_tool}" advance-defaults ${TRACE:+-v=debug} ../image_registry.yaml
         echo $?
     )
     [[ $advance_exit_code -gt 1 ]] && die "Error advancing tags"
@@ -122,12 +126,12 @@ do_create_pr() {
     # was successful then we need to regenerate static specs.
     if [[ $advance_exit_code -eq 0 ]]; then
         log "Regenerating static specs after advancing default tags"
-        bi-source gen-static-specs
+        bix-source gen-static-specs
     fi
 
     log "${GREEN}Formatting image_registry.yaml${NOFORMAT}"
 
-    bi-source fmt yaml
+    bix-source fmt yaml
 
     local title="chore(deps): Automated registry update [bi-registry-bot]"
     local message="This is an automated update of the image registry.
