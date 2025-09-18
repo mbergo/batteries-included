@@ -14,7 +14,9 @@ defmodule ControlServerWeb.MixProject do
       test_paths: test_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      compilers: [:phoenix_live_view] ++ Mix.compilers(),
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 
@@ -46,7 +48,7 @@ defmodule ControlServerWeb.MixProject do
       {:kube_services, in_umbrella: true},
       {:bandit, "~> 1.4"},
       {:websock_adapter, "~> 0.5"},
-      {:gettext, "~> 0.20"},
+      {:gettext, "~> 1.0"},
       {:inflex, "~> 2.1"},
       {:jason, "~> 1.4"},
 

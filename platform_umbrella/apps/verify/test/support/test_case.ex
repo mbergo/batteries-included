@@ -64,6 +64,8 @@ defmodule Verify.TestCase do
         Logger.debug("Starting Kind for spec: #{install_spec}")
         tmp_dir = get_tmp_dir(__MODULE__)
 
+        Application.put_env(:wallaby, :screenshot_dir, tmp_dir, persistent: true)
+
         kind_pid =
           start_supervised!({
             # the kind_install_worker cleans up after itself as it is stopped
@@ -77,6 +79,9 @@ defmodule Verify.TestCase do
         # check that we have all of the pre-pulled images before installing batteries
         :ok = wait_for_images(image_pid, @images)
 
+        # double check that control server is available
+        {:ok, _} = url |> build_retryable_get() |> retry()
+
         # install any requested batteries
         {:ok, session} = start_session(url)
 
@@ -85,7 +90,9 @@ defmodule Verify.TestCase do
             Verify.BatteryInstallWorker,
             [
               name: {:via, Registry, {Verify.Registry, __MODULE__.BatteryInstallWorker, Verify.BatteryInstallWorker}},
-              session: session
+              session: session,
+              rage_output: tmp_dir,
+              kind_worker_pid: kind_pid
             ]
           })
 
