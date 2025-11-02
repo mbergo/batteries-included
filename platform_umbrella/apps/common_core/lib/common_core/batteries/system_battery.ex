@@ -4,6 +4,9 @@ defmodule CommonCore.Batteries.SystemBattery do
   use CommonCore, :schema
 
   alias CommonCore.Batteries.AwsLoadBalancerControllerConfig
+  alias CommonCore.Batteries.AzureLoadBalancerControllerConfig
+  alias CommonCore.Batteries.AzureClusterAutoscalerConfig
+  alias CommonCore.Batteries.AzureKarpenterConfig
   alias CommonCore.Batteries.BatteryCAConfig
   alias CommonCore.Batteries.BatteryCoreConfig
   alias CommonCore.Batteries.CertManagerConfig
@@ -29,6 +32,7 @@ defmodule CommonCore.Batteries.SystemBattery do
   alias CommonCore.Batteries.OllamaConfig
   alias CommonCore.Batteries.PromtailConfig
   alias CommonCore.Batteries.RedisConfig
+  alias CommonCore.Batteries.RoboSREConfig
   alias CommonCore.Batteries.SSOConfig
   alias CommonCore.Batteries.StaleResourceCleanerConfig
   alias CommonCore.Batteries.TimelineConfig
@@ -53,6 +57,8 @@ defmodule CommonCore.Batteries.SystemBattery do
   # styler:sort
   @possible_types [
     aws_load_balancer_controller: AwsLoadBalancerControllerConfig,
+    azure_karpenter: AzureKarpenterConfig,
+    azure_load_balancer_controller: AzureLoadBalancerControllerConfig,
     battery_ca: BatteryCAConfig,
     battery_core: BatteryCoreConfig,
     cert_manager: CertManagerConfig,
@@ -78,6 +84,7 @@ defmodule CommonCore.Batteries.SystemBattery do
     ollama: OllamaConfig,
     promtail: PromtailConfig,
     redis: RedisConfig,
+    robo_sre: RoboSREConfig,
     sso: SSOConfig,
     stale_resource_cleaner: StaleResourceCleanerConfig,
     timeline: TimelineConfig,

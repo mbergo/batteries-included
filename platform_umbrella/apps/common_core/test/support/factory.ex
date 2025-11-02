@@ -8,12 +8,15 @@ defmodule CommonCore.Factory do
   alias CommonCore.ClusterType
   alias CommonCore.Ecto.BatteryUUID
   alias CommonCore.FerretDB.FerretService
-  alias CommonCore.Installs.Options
   alias CommonCore.Notebooks.JupyterLabNotebook
   alias CommonCore.OpenAPI.KeycloakAdminSchema.ClientRepresentation
   alias CommonCore.OpenAPI.KeycloakAdminSchema.RealmRepresentation
+  alias CommonCore.Postgres.Cluster
   alias CommonCore.Projects.Project
+  alias CommonCore.Size
   alias CommonCore.StateSummary.KeycloakSummary
+  alias CommonCore.Usage
+  alias CommonCore.Util.Memory
 
   # with Ecto
   def state_summary_factory(attrs \\ %{}) do
@@ -56,7 +59,7 @@ defmodule CommonCore.Factory do
     # Ensure this is a map
     attrs = Map.new(attrs)
 
-    usage = Map.get_lazy(attrs, :usage, fn -> sequence(:usage, Keyword.values(Options.usages())) end)
+    usage = Map.get_lazy(attrs, :usage, fn -> sequence(:usage, Keyword.values(Usage.usages())) end)
 
     kube_provider =
       Map.get_lazy(attrs, :kube_provider, fn -> sequence(:kube_provider, Map.keys(ClusterType.__enum_map__())) end)
@@ -78,7 +81,7 @@ defmodule CommonCore.Factory do
       control_jwk: control_jwk,
       user_id: user_id,
       team_id: team_id,
-      default_size: sequence(:default_size, Options.sizes())
+      default_size: sequence(:default_size, Size.__enum_map__() |> Map.keys() |> Enum.reject(&(&1 == :custom)))
     }
     |> merge_attributes(attrs)
     |> evaluate_lazy_attributes()
@@ -200,13 +203,74 @@ defmodule CommonCore.Factory do
     }
   end
 
-  def postgres_factory do
-    %CommonCore.Postgres.Cluster{
+  def postgres_factory(attrs) do
+    # Convert attrs to map
+    attrs = Map.new(attrs)
+
+    memory_values = [
+      Memory.to_bytes(512, :MB),
+      Memory.to_bytes(8, :GB),
+      Memory.to_bytes(16, :GB),
+      Memory.to_bytes(32, :GB),
+      Memory.to_bytes(256, :GB),
+      nil
+    ]
+
+    cpu_values = [500, 4000, 8000, 10_000, 32_000, nil]
+
+    {memory_requested, attrs} =
+      Map.pop_lazy(attrs, :memory_requested, fn ->
+        sequence(:memory_requested, memory_values)
+      end)
+
+    {memory_limits, attrs} =
+      Map.pop_lazy(attrs, :memory_limits, fn ->
+        sequence(
+          :memory_limits,
+          Enum.filter(memory_values, &(&1 == nil or memory_requested == nil or &1 >= memory_requested))
+        )
+      end)
+
+    {cpu_requested, attrs} =
+      Map.pop_lazy(attrs, :cpu_requested, fn ->
+        sequence(:cpu_requested, cpu_values)
+      end)
+
+    {cpu_limits, attrs} =
+      Map.pop_lazy(attrs, :cpu_limits, fn ->
+        sequence(:cpu_limits, Enum.filter(cpu_values, &(&1 == nil or cpu_requested == nil or &1 >= cpu_requested)))
+      end)
+
+    {storage_size, attrs} =
+      Map.pop_lazy(attrs, :storage_size, fn ->
+        sequence(:storage_size, [
+          Memory.to_bytes(512, :MB),
+          Memory.to_bytes(1, :GB),
+          Memory.to_bytes(100, :GB),
+          Memory.to_bytes(2, :TB)
+        ])
+      end)
+
+    %Cluster{
       name: sequence("test-postgres-cluster"),
-      storage_size: 524_288_000,
-      cpu_requested: 500,
-      cpu_limits: 500
+      storage_size: storage_size,
+      num_instances: sequence(:num_instances, [1, 2, 3, 4]),
+      users: [build(:postgres_user)],
+      cpu_requested: cpu_requested,
+      cpu_limits: cpu_limits,
+      memory_requested: memory_requested,
+      memory_limits: memory_limits
     }
+    |> merge_attributes(attrs)
+    |> evaluate_lazy_attributes()
+  end
+
+  def postgres_user_factory do
+    evaluate_lazy_attributes(%CommonCore.Postgres.PGUser{
+      username: sequence("test-user-"),
+      roles: ["superuser", "createdb"],
+      credential_namespaces: ["battery-data", "default"]
+    })
   end
 
   def redis_factory do
@@ -272,7 +336,7 @@ defmodule CommonCore.Factory do
   def traditional_service_factory do
     %CommonCore.TraditionalServices.Service{
       name: sequence("knative-service-"),
-      virtual_size: sequence(:virtual_size, ~w(tiny small medium large xlarge huge)),
+      virtual_size: sequence(:virtual_size, ~w(tiny small medium large xlarge huge)a),
       kube_deployment_type: sequence(:kube_deployment_type, [:statefulset, :deployment]),
       num_instances: sequence(:num_instances, [1, 2, 3, 4]),
       containers: [build(:containers_container)],

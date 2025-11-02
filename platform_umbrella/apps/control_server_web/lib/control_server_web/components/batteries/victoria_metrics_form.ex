@@ -71,6 +71,12 @@ defmodule ControlServerWeb.Batteries.VictoriaMetricsForm do
 
       <.panel title="Configuration">
         <.fieldset>
+          <.image_version
+            field={@form[:cluster_image_tag_override]}
+            image_id={:vm_insert}
+            label="Cluster Image Tag"
+          />
+
           <.field>
             <:label>Cookie Secret</:label>
             <.input type="password" field={@form[:cookie_secret]} disabled={@action != :new} />
@@ -101,7 +107,7 @@ defmodule ControlServerWeb.Batteries.VictoriaMetricsForm do
             <.input
               type="select"
               field={@form[:virtual_size]}
-              options={VictoriaMetricsConfig.preset_options_for_select()}
+              options={VictoriaMetricsConfig.preset_options()}
             />
           </.field>
 

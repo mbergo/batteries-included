@@ -1,7 +1,9 @@
+---
 version: 2
 
 builds:
-  - binary: bi
+  - id: bi
+    binary: bi
     dir: bi
     env:
       - CGO_ENABLED=0
@@ -25,8 +27,32 @@ builds:
       - -w -s -X 'bi/pkg.Version={{.Version}}'
 
     hooks:
-      pre: ./bin/verify-keys
+      pre:
+        - ./bin/verify-keys
+        - ./bin/go-generate
       post: ./bin/clean-tmp
+
+  - id: registry-tool
+    binary: registry-tool
+    dir: registry-tool
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+    tags:
+      - netgo
+      - osusergo
+      - static_build
+
+    flags:
+      - -trimpath
+
 upx:
   # only run upx on release, not on snapshot.
   # This will help keep CI snappy

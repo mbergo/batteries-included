@@ -1,0 +1,429 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+# Get where the current script is located
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+# Get the root directory of the project
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." &>/dev/null && pwd -P)
+
+source "${ROOT_DIR}/bin/lib/common-functions.sh"
+source "${ROOT_DIR}/bin/lib/docker-functions.sh"
+
+do_build_base_images() {
+    local ubuntu_version
+
+    ubuntu_version=$(default_tag_for_registry_image ubuntu)
+
+    for base in build deploy; do
+        do_build_image "$base" "${ubuntu_version}"
+    done
+}
+
+do_build_image() {
+    local image_name=${1:-"control-server"}
+    local ensure_base_images=1
+    local version
+    local version_hash
+    local docker_base_tag
+
+    # Pre-create the version for all docker builds
+    version_hash=$(version_tag)
+    version=$(image_tag)
+    docker_base_tag=$(base_image_tag)
+
+    log "${GREEN}Building${NOFORMAT} ${image_name} image with version: ${version}"
+
+    declare -a platform_args build_args
+
+    build_args+=(
+        --load
+        --build-arg "BUILD_IMAGE_TAG=${docker_base_tag}"
+        --build-arg "DEPLOY_IMAGE_TAG=${docker_base_tag}"
+    )
+
+    platform_args+=(
+        -f docker/platform.dockerfile
+        --build-arg "BI_RELEASE_HASH=${version_hash}"
+    )
+
+    case "${image_name}" in
+    control-server)
+        build_args+=(
+            -t "${REGISTRY}/control-server:${version}"
+            --build-arg RELEASE=control_server
+            --build-arg IMAGE_DESCRIPTION="Batteries Included Control Server - Management and orchestration service for Kubernetes clusters"
+            "${platform_args[@]}"
+        )
+        ;;
+    home-base)
+        build_args+=(
+            -t "${REGISTRY}/home-base:${version}"
+            --build-arg RELEASE=home_base
+            --build-arg IMAGE_DESCRIPTION="Batteries Included Home Base - User interface and dashboard for cluster management"
+            "${platform_args[@]}"
+        )
+        ;;
+    kube-bootstrap)
+        build_args+=(
+            -t "${REGISTRY}/kube-bootstrap:${version}"
+            --build-arg RELEASE=kube_bootstrap
+            --build-arg IMAGE_DESCRIPTION="Batteries Included Kube Bootstrap - Kubernetes cluster initialization and setup service"
+            "${platform_args[@]}"
+        )
+        ;;
+    pastebin)
+        build_args+=(-f docker/pastebin.dockerfile -t "${REGISTRY}/pastebin:${version}")
+        ;;
+    keycloak)
+        # Keycloak takes an upstream tag as an argument
+        if [[ $# -lt 2 ]]; then
+            die "Missing upstream tag for keycloak image. Usage: ${BASH_SOURCE[0]} build-image keycloak <upstream_tag>"
+        fi
+        local upstream_tag=${2}
+        build_args+=(
+            -t "${REGISTRY}/keycloak:${upstream_tag}-${version_hash}"
+            -f "${ROOT_DIR}/docker/keycloak.dockerfile"
+            --build-arg "KC_VERSION=${upstream_tag}"
+        )
+        if version_lt "${upstream_tag}" "26.0.0"; then
+            build_args+=(--build-arg "JAR_NAME=keycloak-theme-for-kc-22-to-25.jar")
+        else
+            build_args+=(--build-arg "JAR_NAME=keycloak-theme-for-kc-all-other-versions.jar")
+        fi
+        ;;
+    postgres | postgresql)
+        if [[ $# -lt 2 ]]; then
+            die "Missing upstream tag for postgres image. Usage: ${BASH_SOURCE[0]} build-image postgres <upstream_tag>"
+        fi
+        local upstream_tag=${2}
+        local major
+        major=$(echo "$upstream_tag" | cut -d'.' -f 1)
+
+        local docdb_source_url
+        local docdb_version
+        read -r docdb_version docdb_source_url < <(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --jq '.[0] | [.name, .tarball_url] | @tsv' \
+            /repos/documentdb/documentdb/tags)
+
+        build_args+=(
+            -t "${REGISTRY}/postgresql:${upstream_tag}"
+            -f "${ROOT_DIR}/docker/postgres.dockerfile"
+            --build-arg "PG_VERSION=${upstream_tag}"
+            --build-arg "PG_MAJOR=${major}"
+            --build-arg "DOCDB_URL=${docdb_source_url}"
+            --build-arg "DOCDB_VERSION=${docdb_version}"
+        )
+        ;;
+    build | build-base | build_base)
+        if [[ $# -lt 2 ]]; then
+            die "Missing upstream tag for build-base image. Usage: ${BASH_SOURCE[0]} build-image build-base <upstream_tag>"
+        fi
+        local upstream_tag=${2}
+        local elixir_version
+        local erlang_version
+        elixir_version=$(tool_version elixir | cut -d'-' -f 1)
+        erlang_version=$(tool_version erlang)
+
+        build_args+=(
+            -t "${REGISTRY}/build-base:${upstream_tag}-$(docker_hash)"
+            -f "${ROOT_DIR}/docker/build-base.dockerfile"
+            --build-arg UBUNTU_VERSION="${upstream_tag}"
+            --build-arg ELIXIR_VERSION="${elixir_version}"
+            --build-arg ERLANG_VERSION="${erlang_version}"
+        )
+        ensure_base_images=0
+        ;;
+    deploy | deploy-base | deploy_base)
+        if [[ $# -lt 2 ]]; then
+            die "Missing upstream tag for deploy-base image. Usage: ${BASH_SOURCE[0]} build-image deploy-base <upstream_tag>"
+        fi
+        local upstream_tag=${2}
+        build_args+=(
+            -t "${REGISTRY}/deploy-base:${upstream_tag}-$(docker_hash)"
+            -f "${ROOT_DIR}/docker/deploy-base.dockerfile"
+            --build-arg UBUNTU_VERSION="${upstream_tag}"
+        )
+        ensure_base_images=0
+        ;;
+    *)
+        die "Unknown image name: ${image_name} not in control-server, home-base, kube-bootstrap, pastebin, keycloak, postgres{,ql}, build-base, deploy-base"
+        ;;
+    esac
+
+    if in_github_action; then
+        build_args+=(--progress=plain)
+    fi
+
+    if [[ "${ensure_base_images}" -eq 1 ]]; then
+        # if any docker files changed, make sure we're not using old cache
+        do_ensure_base_images "${docker_base_tag}"
+    fi
+
+    docker build \
+        ${TRACE:+--progress=plain} \
+        "${build_args[@]}" \
+        .
+}
+
+do_ensure_base_images() {
+    local docker_base_tag=${1}
+
+    for base in build deploy; do
+        local image="${REGISTRY}/${base}-base:${docker_base_tag}"
+        if ! docker images "${image}" --format=json | jq -e '.' &>/dev/null; then
+            log "${YELLOW}Checked${NOFORMAT} base image: ${CYAN}${image}${NOFORMAT}. Not found."
+            try_pull_base_image "${image}" &
+        fi
+    done
+    wait
+}
+
+try_pull_base_image() {
+    local image="${1}"
+    log "${GREEN}Attempting to pull${NOFORMAT}: ${image}"
+    if ! docker pull "${image}"; then
+        log "${YELLOW}Failed${NOFORMAT} to pull image. Building base images instead."
+        do_build_base_images
+    fi
+}
+
+do_push_images() {
+    local base_image_tag
+    local version
+
+    base_image_tag=$(base_image_tag)
+    for base in build deploy; do
+        tag_push "${REGISTRY}/${base}-base" "${base_image_tag}"
+    done
+
+    version=$(image_tag)
+
+    for img in control-server home-base kube-bootstrap pastebin; do
+        tag_push "${REGISTRY}/${img}" "${version}" "$@"
+    done
+}
+
+do_save_images() {
+    local out="${1:-""}"
+    [[ -z "${out:-""}" ]] && {
+        log "${RED}Must pass an argument for the output tarball location${NOFORMAT}"
+        exit 1
+    }
+
+    declare -a imgs
+    local base_image_tag
+    base_image_tag=$(base_image_tag)
+    for base in build deploy; do
+        imgs+=("${REGISTRY}/${base}-base:${base_image_tag}")
+    done
+
+    local version
+    version=$(image_tag)
+    for img in control-server home-base kube-bootstrap pastebin; do
+        imgs+=("${REGISTRY}/${img}:${version}")
+    done
+
+    SECONDS=0
+    docker save -o "${out}" "${imgs[@]}"
+    log "Finished saving images to tar file in ${SECONDS} seconds"
+}
+
+# Trigger GitHub workflow for missing upstream tags
+do_trigger_missing_upstream() {
+    local target="${1:-""}"
+    local upstream_image
+    local upstream_tags
+    local our_tags
+    local clean_tags
+
+    if [[ -z "${target}" ]]; then
+        die "Missing desired target to check"
+    fi
+
+    log "Checking for missing upstream tags for ${target}"
+
+    case "${target}" in
+    keycloak)
+        upstream_image=keycloak_upstream
+        ;;
+    postgres | postgresql)
+        target=postgresql
+        upstream_image=postgresql_upstream
+        ;;
+    deploy | deploy-base)
+        target=deploy_base
+        upstream_image=ubuntu
+        ;;
+    build | build-base)
+        target=build_base
+        upstream_image=ubuntu
+        ;;
+
+    *)
+        die "Unknown upstream target: ${target}"
+        ;;
+    esac
+
+    upstream_tags=$(tags_for_registry_image "${upstream_image}")
+    our_tags=$(tags_for_registry_image "${target}")
+    # Strip version hashes from our tags to get base versions
+    clean_tags=$(strip_version_hash "${our_tags}")
+
+    log "Upstream tags:\n${upstream_tags}"
+    log "Our tags (clean):\n${clean_tags}"
+
+    # Find missing tags (in either direction)
+    local missing_tags
+    missing_tags=$(find_missing_tags "${upstream_tags}" "${clean_tags}")
+
+    if [[ -z "${missing_tags}" ]]; then
+        log "No missing tags found - all upstream tags are covered"
+        return 0
+    fi
+
+    log "Found ${YELLOW}$(echo "${missing_tags}" | wc -w)${NOFORMAT} missing tags"
+
+    local trigger_count=0
+    for tag in ${missing_tags}; do
+        log "Triggering workflow for target ${CYAN}${target}${NOFORMAT} and version ${CYAN}${tag}${NOFORMAT}"
+        gh workflow run "image.yml" -f "target=${target}" -f "version=${tag}"
+        trigger_count=$((trigger_count + 1))
+    done
+
+    log "Triggered ${YELLOW}${trigger_count}${NOFORMAT} workflow runs"
+}
+
+do_push_image() {
+    local target="$1"
+    local upstream_tag="$2"
+    local image_name
+
+    [[ -z "$target" ]] && die "Missing target"
+    [[ -z "$upstream_tag" ]] && die "Missing upstream tag"
+
+    case "${target}" in
+    keycloak)
+        local version_tag
+        version_tag=$(version_tag)
+        image_name="${REGISTRY}/keycloak:${upstream_tag}-${version_tag}"
+        ;;
+    postgres | postgresql)
+        image_name="${REGISTRY}/postgresql:${upstream_tag}"
+        ;;
+    deploy | deploy_base)
+        image_name="${REGISTRY}/deploy-base:${upstream_tag}-$(docker_hash)"
+        ;;
+    build | build_base)
+        image_name="${REGISTRY}/build-base:${upstream_tag}-$(docker_hash)"
+        ;;
+    *)
+        die "Unknown upstream target: ${RED}${target}${NOFORMAT}"
+        ;;
+    esac
+
+    log "Preparing to push image: ${CYAN}${image_name}${NOFORMAT}"
+
+    # Validate the image exists before pushing
+    validate_image_exists "${image_name}" || return 1
+
+    log "Pushing image ${CYAN}${image_name}${NOFORMAT} to registry"
+
+    docker push "${image_name}" || die "Failed to push image: ${RED}${image_name}${NOFORMAT}"
+
+    log "Successfully pushed image: ${CYAN}${image_name}${NOFORMAT}"
+}
+
+usage() {
+    cat <<EOF
+Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-f] command [arg1...]
+
+Available options:
+
+-h, --help      Print this help and exit
+-v, --verbose   Print script debug info
+
+Available commands:
+
+- ensure-base-images        Ensure base images are present locally
+- build-base-images         Builds docker base images
+- build-image               Build a docker image
+- push-images               Push all the container images to a registry
+- save-images               Archive all the container images to an output tar
+- get-base-tag              Get the current tag of the docker base images
+- get-image-tag             Get the current tag of the publishable images
+- trigger-missing-upstream  Identify and trigger workflow for upstream image tags that don't have BI images
+- push-image                Push the specified upstream image with the specified tag
+EOF
+    exit 1
+}
+
+parse_params() {
+    while :; do
+        case "${1-}" in
+        -h | --help) usage ;;
+        -v | --verbose) export TRACE=1 ;;
+        --no-color) export NO_COLOR=1 ;;
+        -?*) die "Unknown option: $1" ;;
+        *) break ;;
+        esac
+        shift
+    done
+
+    if [[ $# -lt 1 ]]; then
+        log "Missing script arguments"
+        usage
+    fi
+
+    command="$1"
+    shift
+    args=("$@")
+
+    return 0
+}
+
+parse_params "$@"
+setup_colors
+setup_trace
+setup_root
+maybe_add_to_path "${ROOT_DIR}/bin"
+export PATH
+
+case "$command" in
+ensure-base-images)
+    do_ensure_base_images "$(base_image_tag)"
+    ;;
+build-base-images)
+    do_build_base_images
+    ;;
+build-image)
+    do_build_image "${args[@]}"
+    ;;
+push-images)
+    do_push_images "${args[@]}"
+    ;;
+save-images)
+    do_save_images "${args[@]}"
+    ;;
+get-base-tag)
+    base_image_tag
+    ;;
+get-image-tag)
+    image_tag
+    ;;
+trigger-missing-upstream)
+    do_trigger_missing_upstream "${args[@]}"
+    ;;
+push-image)
+    if [[ ${#args[@]} -lt 2 ]]; then
+        log "Missing argument(s) for push-image. Need image and upstream tag"
+        usage
+    fi
+    do_push_image "${args[@]}"
+    ;;
+*)
+    usage
+    ;;
+esac
